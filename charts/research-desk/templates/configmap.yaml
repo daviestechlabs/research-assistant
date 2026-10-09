@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "desk.configName" . }}
+  labels:
+    {{- include "desk.labels" . | nindent 4 }}
+data:
+  RESEARCH_CHAT_MODEL: {{ .Values.inference.model | quote }}
+  RESEARCH_CHAT_URL: {{ .Values.inference.url | quote }}
+  RESEARCH_LIMIT_OWNER: litellm
+  RESEARCH_OIDC_ISSUER: {{ .Values.auth.issuer | quote }}
+  RESEARCH_OIDC_AUDIENCE: {{ .Values.auth.audience | quote }}
+  RESEARCH_OIDC_SUBJECTS: {{ join "," .Values.auth.allowedSubjects | quote }}
+  RESEARCH_PUBLIC_ORIGIN: {{ .Values.auth.publicOrigin | quote }}
+  {{- if .Values.auth.originAddress }}
+  RESEARCH_OIDC_ORIGIN_ADDRESS: {{ .Values.auth.originAddress | quote }}
+  {{- end }}
+  RESEARCH_RERANK_URL: {{ .Values.retrieval.rerankURL | quote }}
+  RESEARCH_EMBEDDING_ORIGIN: {{ .Values.retrieval.embeddingOrigin | quote }}
+  RESEARCH_VECTOR_ORIGIN: {{ .Values.retrieval.vectorOrigin | quote }}
+  RESEARCH_CATALOG_SHA256: {{ .Values.retrieval.catalogSHA256 | quote }}
+  RESEARCH_EMBEDDING_SHA256: {{ .Values.retrieval.embeddingSHA256 | quote }}
+  {{- if .Values.retrieval.embeddingOrigin }}
+  RESEARCH_SEMANTIC_STATUS: /catalog/research-semantic-status.json
+  {{- end }}
+  GOMEMLIMIT: 1GiB
+
+  RESEARCH_LITELLM_ORIGIN: {{ trimSuffix "/v1/chat/completions" .Values.inference.url | quote }}
+  RESEARCH_S3_ENDPOINT: {{ .Values.nas.endpoint | quote }}
+  RESEARCH_S3_BUCKET: {{ .Values.nas.bucket | quote }}
+  RESEARCH_S3_PDF_PREFIX: {{ .Values.nas.pdfPrefix | quote }}
+  RESEARCH_S3_PDF_SHARDS: {{ .Values.nas.pdfShards | quote }}
+  RESEARCH_S3_REGION: {{ .Values.nas.region | quote }}
+  RESEARCH_DESK_NAME: {{ .Values.branding.name | quote }}
+  RESEARCH_DESK_ICON_ALT: {{ .Values.branding.iconAlt | quote }}
+  RESEARCH_DESK_DESCRIPTION: {{ .Values.branding.description | quote }}
+  RESEARCH_BOOK_MANIFEST: {{ .Values.books.manifestFile | quote }}
+  RESEARCH_BOOK_PLAN_SHA256: {{ .Values.books.planSHA256 | quote }}
+  RESEARCH_BOOK_COUNT: {{ .Values.books.count | quote }}
+  {{- if .Values.branding.configMapName }}
+  RESEARCH_PRIVATE_CONFIG_DIR: /private-config
+  RESEARCH_GENERATION_AUDIT_MANIFEST: /private-config/quality_generation_audit.json
+  {{- end }}
+
+  {{- if .Values.indexing.enabled }}
+  RESEARCH_INDEX_ROOT: {{ printf "/catalog/%s" .Values.indexing.directory | quote }}
+  RESEARCH_INDEX_CONFIG: /index-config/indexing.json
+  RESEARCH_INDEX_ORIGINAL_CATALOG: {{ printf "/catalog/%s" .Values.storage.catalogFile | quote }}
+  {{- end }}

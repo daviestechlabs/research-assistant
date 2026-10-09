@@ -1,0 +1,11 @@
+.git
+research-assistant
+*.sqlite*
+*.db
+*.pdf
+*.epub
+*.parquet
+.env*
+private-config
+evidence
+dist

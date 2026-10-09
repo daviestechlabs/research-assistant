@@ -1,0 +1,9 @@
+Research Desk is installed in {{ .Release.Namespace }}.
+The existing claim {{ .Values.storage.existingClaim }} remains externally owned.
+The application requires the configured OIDC subject before it serves private research.
+LiteLLM owns inference rate and concurrency limits.
+{{- if .Values.gateway.enabled }}
+Open {{ .Values.auth.publicOrigin }}.
+{{- else }}
+The Gateway route is disabled. Configure an authenticated route before browser use.
+{{- end }}

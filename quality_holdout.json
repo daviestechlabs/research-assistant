@@ -1,0 +1,79 @@
+{
+  "contract": "held-out-evidence-quality-v1",
+  "annotation": "Codex-authored expectations, checked against two saved abstracts and sealed before the first reviewer request. These four cases were not used to revise the review policy. This is a small held-out reviewer check, not independent human labels or generated-answer correctness.",
+  "sources": [
+    {
+      "id": "arxiv:0704.1504",
+      "title": "The Formation of Lake Stars",
+      "fingerprint": "0874d9e117fdfafca8b642dd637fcbaa53ca2111aba8f22b78b3e75c0dd5c815"
+    },
+    {
+      "id": "arxiv:0704.1627",
+      "title": "Thin elastic shells with variable thickness for lithospheric flexure of one-plate planets",
+      "fingerprint": "6626f4ccb17d9fabe78b7750133f93019d19a20448496732050ff0bcf7c54de7"
+    }
+  ],
+  "cases": [
+    {
+      "id": "lake-executed-model",
+      "category": "methods",
+      "kind": "inference",
+      "text": "The study describes a mathematical model of the principal features of lake-star formation.",
+      "evidence": [
+        {
+          "id": "arxiv:0704.1504",
+          "quote": "Here we describe a simple mathematical model that captures the principal features of lake-star formation;"
+        }
+      ],
+      "expected_supported": true,
+      "rationale": "The excerpt identifies what this study describes and the phenomenon it models."
+    },
+    {
+      "id": "shell-variable-thickness",
+      "category": "methods",
+      "kind": "inference",
+      "text": "The study obtains scalar flexure equations for deformations of a thin spherical shell with variable thickness.",
+      "evidence": [
+        {
+          "id": "arxiv:0704.1627",
+          "quote": "In this article we obtain the scalar flexure equations governing the deformations of a thin spherical shell with variable thickness"
+        }
+      ],
+      "expected_supported": true,
+      "rationale": "The excerpt explicitly states the obtained equations, geometry, and variable thickness."
+    },
+    {
+      "id": "lake-shell-same-mechanism",
+      "category": "agreements",
+      "kind": "inference",
+      "text": "Both studies establish that lake-star formation and planetary flexure use the same physical mechanism.",
+      "evidence": [
+        {
+          "id": "arxiv:0704.1504",
+          "quote": "Here we describe a simple mathematical model that captures the principal features of lake-star formation;"
+        },
+        {
+          "id": "arxiv:0704.1627",
+          "quote": "In this article we obtain the scalar flexure equations governing the deformations of a thin spherical shell with variable thickness"
+        }
+      ],
+      "expected_supported": false,
+      "rationale": "Each excerpt describes a different modeled phenomenon. Neither establishes an identical physical mechanism across the two sources."
+    },
+    {
+      "id": "lake-exact-guarantee",
+      "category": "limits",
+      "kind": "inference",
+      "text": "The model guarantees exact star-arm counts in every natural lake.",
+      "evidence": [
+        {
+          "id": "arxiv:0704.1504",
+          "quote": "The number of star arms emerges from a stability analysis of this competition"
+        }
+      ],
+      "expected_supported": false,
+      "rationale": "A stability analysis does not establish an exact universal guarantee. The claim also fails to identify a stated limitation."
+    }
+  ],
+  "retrieval": []
+}

@@ -1,0 +1,65 @@
+{{- if .Values.gateway.enabled }}
+{{- if ne .Values.auth.publicOrigin (printf "https://%s" .Values.gateway.host) }}
+{{- fail "gateway.host must match auth.publicOrigin" }}
+{{- end }}
+{{- if not .Values.gateway.parents }}
+{{- fail "gateway.parents must contain an existing HTTPS gateway" }}
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "desk.name" . }}
+  labels:
+    {{- include "desk.labels" . | nindent 4 }}
+  {{- with .Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  hostnames: [{{ .Values.gateway.host | quote }}]
+  parentRefs:
+    {{- toYaml .Values.gateway.parents | nindent 4 }}
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /}
+      timeouts:
+        request: 190s
+        backendRequest: 185s
+      backendRefs:
+        - name: {{ include "desk.name" . }}
+          port: 8080
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ include "desk.name" . }}
+  labels:
+    {{- include "desk.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ include "desk.name" . }}
+  oidc:
+    cookieConfig:
+      sameSite: Lax
+    provider:
+      issuer: {{ .Values.auth.issuer | quote }}
+      authorizationEndpoint: {{ required "gateway.authorizationEndpoint is required" .Values.gateway.authorizationEndpoint | quote }}
+      tokenEndpoint: {{ required "gateway.tokenEndpoint is required" .Values.gateway.tokenEndpoint | quote }}
+      endSessionEndpoint: {{ required "gateway.endSessionEndpoint is required" .Values.gateway.endSessionEndpoint | quote }}
+      backendRefs:
+        - name: {{ .Values.gateway.providerBackend.name }}
+          namespace: {{ .Values.gateway.providerBackend.namespace }}
+          port: {{ .Values.gateway.providerBackend.port }}
+    clientID: {{ .Values.auth.audience | quote }}
+    clientSecret:
+      name: {{ .Values.gateway.oidcSecretName }}
+    redirectURL: {{ printf "%s/oauth2/callback" .Values.auth.publicOrigin | quote }}
+    scopes: [openid, profile, email, offline_access]
+    logoutPath: /oauth2/logout
+    refreshToken: true
+    forwardAccessToken: true
+    forwardIDToken:
+      header: x-envoy-oidc-id-token
+{{- end }}

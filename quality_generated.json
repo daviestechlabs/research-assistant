@@ -1,0 +1,30 @@
+{
+  "contract": "generated-output-audit-v1",
+  "receipt_sha256": "9e266000b7c6ac43e84807491873b492a3b605ad6a1e1d2ef9f4b67483cbc98a",
+  "sources": [
+    {
+      "id": "arxiv:2110.14440",
+      "fingerprint": "92e16a6fecfa0683d1a54e5d63c206ce368006ca73eeedd5e2a7f82023489e23"
+    },
+    {
+      "id": "arxiv:2404.02180",
+      "fingerprint": "761893cff2286194a74318a67085f42667ba24ba7d42dea3bbbf0d09b7e4c39f"
+    },
+    {
+      "id": "arxiv:2303.11404",
+      "fingerprint": "81eef55742944ee210a14c631cf9c5b04ee0accaf5377bc426e1034d2f798615"
+    },
+    {
+      "id": "arxiv:physics/9610011",
+      "fingerprint": "9567ea325a998173e15d252c3f2098f3541f7df198ab56f4a490bc6a37bd7490"
+    },
+    {
+      "id": "arxiv:2006.11310",
+      "fingerprint": "6d59ca581558f52cca9791ac875156b073557e771be8e97957b620eb29065f47"
+    },
+    {
+      "id": "dnd:players-handbook",
+      "fingerprint": "390ee8e52094afdde9b8c0d3389dd488d8856110c98eafd0c3fd658c6858a676"
+    }
+  ]
+}

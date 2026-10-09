@@ -1,0 +1,6 @@
+apiVersion: v2
+name: research-desk
+description: Research assistant with abstract search, saved sources, and grounded research.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

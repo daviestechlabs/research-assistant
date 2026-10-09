@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "image",
+    "networkPolicy",
+    "resources"
+  ],
+  "properties": {
+    "image": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9./:_-]+@sha256:[0-9a-f]{64}$"
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+            },
+            "memory": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+            }
+          },
+          "required": [
+            "cpu",
+            "memory"
+          ]
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+            },
+            "memory": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+            }
+          },
+          "required": [
+            "cpu",
+            "memory"
+          ]
+        }
+      },
+      "required": [
+        "requests",
+        "limits"
+      ]
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "apiServerCIDRs",
+        "provider"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "apiServerCIDRs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9.]+/(3[0-2]|[12]?[0-9])$"
+          }
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "cilium",
+            "kubernetes"
+          ]
+        }
+      }
+    },
+    "selectorName": {
+      "type": "string",
+      "enum": [
+        "research-desk-operator"
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+selectorName: research-desk-operator
+image: quay.io/operator-framework/helm-operator@sha256:80e0787ff36e85129d7983dc219736ba8a61e69857fbe46ec7389fddcbbf92f1
+imagePullSecrets: []
+nodeSelector: {}
+resources:
+  requests: {cpu: 50m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 512Mi}
+networkPolicy:
+  enabled: true
+  provider: kubernetes
+  apiServerCIDRs: []

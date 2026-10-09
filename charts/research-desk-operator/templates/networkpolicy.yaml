@@ -1,0 +1,33 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- if not .Values.networkPolicy.apiServerCIDRs }}
+{{- fail "networkPolicy.apiServerCIDRs must include the API Service and API server endpoints" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "operator.name" . }}
+  labels:
+    {{- include "operator.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.selectorName }}
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        {{- range .Values.networkPolicy.apiServerCIDRs }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports:
+        - {port: 443, protocol: TCP}
+        - {port: 6443, protocol: TCP}
+{{- end }}

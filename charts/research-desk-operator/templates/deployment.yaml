@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "operator.name" . }}
+  labels:
+    {{- include "operator.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "operator.labels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "operator.labels" . | nindent 8 }}
+      annotations:
+        checksum/bundle: {{ include (print $.Template.BasePath "/bundle.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "operator.name" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: {{ .Values.image | quote }}
+          command: [/usr/local/bin/helm-operator]
+          args:
+            - run
+            - --watches-file=/opt/helm/bundle/watches.yaml
+            - --leader-elect
+            - --leader-election-id={{ include "operator.name" . }}
+            - --health-probe-bind-address=:8081
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef: {fieldPath: metadata.namespace}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef: {fieldPath: metadata.name}
+            - name: HELM_CACHE_HOME
+              value: /tmp/helm/cache
+            - name: HELM_CONFIG_HOME
+              value: /tmp/helm/config
+            - name: HELM_DATA_HOME
+              value: /tmp/helm/data
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          ports:
+            - name: health
+              containerPort: 8081
+          readinessProbe:
+            httpGet: {path: /readyz, port: health}
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+          volumeMounts:
+            - name: bundle
+              mountPath: /opt/helm/bundle
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: bundle
+          configMap:
+            name: {{ include "operator.name" . }}-bundle
+            items:
+              - key: watches.yaml
+                path: watches.yaml
+              {{- range $path, $_ := .Files.Glob "files/research-desk/**" }}
+              - key: {{ $path | replace "/" "__" | quote }}
+                path: {{ $path | trimPrefix "files/" | quote }}
+              {{- end }}
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}

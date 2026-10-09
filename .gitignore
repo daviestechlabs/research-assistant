@@ -1,0 +1,13 @@
+/research-assistant
+/dist/
+*.sqlite*
+*.db
+.env*
+*.pdf
+*.epub
+*.parquet
+/private-config/
+/evidence/
+__pycache__/
+.venv/
+.DS_Store

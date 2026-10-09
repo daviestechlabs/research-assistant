@@ -1,0 +1,84 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "desk.name" . }}
+  labels:
+    {{- include "desk.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "desk.selector" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.gatewayNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: envoy
+      ports:
+        - port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.modelNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: milvus
+              component: standalone
+      ports:
+        - port: 19530
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.modelNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: litellm
+      ports:
+        - port: 4000
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.modelNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: inference-gateway
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.modelNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: embeddings
+              app.kubernetes.io/instance: embeddings
+      ports:
+        - port: 8000
+    - ports:
+        - port: 443
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.gatewayNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: envoy
+      ports:
+        - port: 10443
+    {{- if .Values.nas.httpCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.nas.httpCIDR | quote }}
+      ports:
+        - port: 80
+    {{- end }}

@@ -1,0 +1,757 @@
+{
+  "apiVersion": "apiextensions.k8s.io/v1",
+  "kind": "CustomResourceDefinition",
+  "metadata": {
+    "name": "researchdesks.research.daviestechlabs.io"
+  },
+  "spec": {
+    "group": "research.daviestechlabs.io",
+    "scope": "Namespaced",
+    "names": {
+      "kind": "ResearchDesk",
+      "listKind": "ResearchDeskList",
+      "plural": "researchdesks",
+      "singular": "researchdesk",
+      "shortNames": [
+        "rdesk"
+      ]
+    },
+    "versions": [
+      {
+        "name": "v1alpha1",
+        "served": true,
+        "storage": true,
+        "subresources": {
+          "status": {}
+        },
+        "additionalPrinterColumns": [
+          {
+            "name": "Deployed",
+            "type": "string",
+            "jsonPath": ".status.conditions[?(@.type==\"Deployed\")].status"
+          },
+          {
+            "name": "Model",
+            "type": "string",
+            "jsonPath": ".spec.inference.model"
+          },
+          {
+            "name": "Age",
+            "type": "date",
+            "jsonPath": ".metadata.creationTimestamp"
+          }
+        ],
+        "schema": {
+          "openAPIV3Schema": {
+            "type": "object",
+            "required": [
+              "spec"
+            ],
+            "properties": {
+              "apiVersion": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "spec": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "object",
+                    "properties": {
+                      "repository": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-zA-Z0-9./:_-]+$"
+                      },
+                      "digest": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^sha256:[0-9a-f]{64}$"
+                      }
+                    },
+                    "required": [
+                      "repository",
+                      "digest"
+                    ],
+                    "default": {
+                      "repository": "ghcr.io/example/research-assistant",
+                      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                    }
+                  },
+                  "imagePullSecrets": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ]
+                    },
+                    "maxItems": 8,
+                    "default": []
+                  },
+                  "replicaCount": {
+                    "type": "integer",
+                    "enum": [
+                      1
+                    ],
+                    "default": 1
+                  },
+                  "storage": {
+                    "type": "object",
+                    "properties": {
+                      "existingClaim": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      },
+                      "catalogFile": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-zA-Z0-9_.-]+[.]sqlite$",
+                        "default": "catalog.sqlite"
+                      },
+                      "memoryMiB": {
+                        "type": "integer",
+                        "minimum": 64,
+                        "maximum": 14336,
+                        "default": 512
+                      }
+                    },
+                    "required": [
+                      "existingClaim"
+                    ]
+                  },
+                  "auth": {
+                    "type": "object",
+                    "properties": {
+                      "issuer": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^https://[^/]+/.+/$"
+                      },
+                      "audience": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "allowedSubjects": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1,
+                        "maxItems": 64,
+                        "x-kubernetes-list-type": "set"
+                      },
+                      "publicOrigin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^https://[a-zA-Z0-9.-]+$"
+                      },
+                      "originAddress": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "issuer",
+                      "audience",
+                      "allowedSubjects",
+                      "publicOrigin"
+                    ]
+                  },
+                  "inference": {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^http://litellm[.][a-z0-9-]+[.]svc[.]cluster[.]local:4000/v1/chat/completions$"
+                      },
+                      "model": {
+                        "type": "string",
+                        "enum": [
+                          "smart-local",
+                          "fast-local"
+                        ]
+                      },
+                      "secretName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      },
+                      "secretKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "model",
+                      "secretName",
+                      "secretKey"
+                    ],
+                    "default": {
+                      "url": "http://litellm.models.svc.cluster.local:4000/v1/chat/completions",
+                      "model": "smart-local",
+                      "secretName": "research-litellm",
+                      "secretKey": "api-key"
+                    }
+                  },
+                  "nas": {
+                    "type": "object",
+                    "properties": {
+                      "secretName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      },
+                      "accessKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      },
+                      "secretKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      },
+                      "httpCIDR": {
+                        "type": "string",
+                        "pattern": "^$|^[0-9.]+/(3[0-2]|[12]?[0-9])$"
+                      },
+                      "endpoint": {
+                        "type": "string"
+                      },
+                      "bucket": {
+                        "type": "string"
+                      },
+                      "pdfPrefix": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "type": "string"
+                      },
+                      "pdfShards": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 10000
+                      }
+                    },
+                    "required": [
+                      "secretName",
+                      "accessKey",
+                      "secretKey"
+                    ],
+                    "default": {
+                      "secretName": "research-nas-read",
+                      "accessKey": "accesskey",
+                      "secretKey": "secretkey",
+                      "httpCIDR": "",
+                      "endpoint": "",
+                      "bucket": "",
+                      "pdfPrefix": "",
+                      "pdfShards": 0,
+                      "region": "us-east-1"
+                    }
+                  },
+                  "retrieval": {
+                    "type": "object",
+                    "properties": {
+                      "rerankURL": {
+                        "type": "string",
+                        "pattern": "^$|^https?://"
+                      },
+                      "embeddingOrigin": {
+                        "type": "string",
+                        "pattern": "^$|^https?://"
+                      },
+                      "vectorOrigin": {
+                        "type": "string",
+                        "pattern": "^$|^https?://"
+                      },
+                      "catalogSHA256": {
+                        "type": "string",
+                        "pattern": "^([0-9a-f]{64})?$"
+                      },
+                      "embeddingSHA256": {
+                        "type": "string",
+                        "pattern": "^([0-9a-f]{64})?$"
+                      }
+                    },
+                    "required": [
+                      "rerankURL",
+                      "embeddingOrigin",
+                      "vectorOrigin",
+                      "catalogSHA256",
+                      "embeddingSHA256"
+                    ],
+                    "default": {
+                      "rerankURL": "",
+                      "embeddingOrigin": "",
+                      "vectorOrigin": "",
+                      "catalogSHA256": "",
+                      "embeddingSHA256": ""
+                    }
+                  },
+                  "gateway": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "host": {
+                        "type": "string"
+                      },
+                      "parents": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                            },
+                            "namespace": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                            },
+                            "sectionName": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "namespace",
+                            "sectionName"
+                          ]
+                        },
+                        "maxItems": 4
+                      },
+                      "oidcSecretName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      },
+                      "authorizationEndpoint": {
+                        "type": "string"
+                      },
+                      "tokenEndpoint": {
+                        "type": "string"
+                      },
+                      "endSessionEndpoint": {
+                        "type": "string"
+                      },
+                      "providerBackend": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                          },
+                          "namespace": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                          },
+                          "port": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 65535
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "namespace",
+                          "port"
+                        ]
+                      },
+                      "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "enabled"
+                    ],
+                    "default": {
+                      "enabled": false,
+                      "host": "",
+                      "parents": [],
+                      "oidcSecretName": "research-oidc",
+                      "authorizationEndpoint": "",
+                      "tokenEndpoint": "",
+                      "endSessionEndpoint": "",
+                      "providerBackend": {
+                        "name": "oidc-provider",
+                        "namespace": "network",
+                        "port": 443
+                      },
+                      "annotations": {}
+                    }
+                  },
+                  "nodeSelector": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "default": {}
+                  },
+                  "resources": {
+                    "type": "object",
+                    "properties": {
+                      "requests": {
+                        "type": "object",
+                        "properties": {
+                          "cpu": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                          },
+                          "memory": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                          }
+                        },
+                        "required": [
+                          "cpu",
+                          "memory"
+                        ]
+                      },
+                      "limits": {
+                        "type": "object",
+                        "properties": {
+                          "cpu": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                          },
+                          "memory": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                          }
+                        },
+                        "required": [
+                          "cpu",
+                          "memory"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "requests",
+                      "limits"
+                    ],
+                    "default": {
+                      "requests": {
+                        "cpu": "500m",
+                        "memory": "1Gi"
+                      },
+                      "limits": {
+                        "cpu": "2",
+                        "memory": "2Gi"
+                      }
+                    }
+                  },
+                  "network": {
+                    "type": "object",
+                    "properties": {
+                      "gatewayNamespace": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      },
+                      "modelNamespace": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      }
+                    },
+                    "required": [
+                      "gatewayNamespace",
+                      "modelNamespace"
+                    ],
+                    "default": {
+                      "gatewayNamespace": "network",
+                      "modelNamespace": "models"
+                    }
+                  },
+                  "suspend": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "legacyDeployment": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "branding": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "iconAlt": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "description": {
+                        "type": "string",
+                        "maxLength": 2000
+                      },
+                      "configMapName": {
+                        "type": "string",
+                        "maxLength": 120
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "iconAlt",
+                      "description",
+                      "configMapName"
+                    ],
+                    "default": {
+                      "name": "Research Desk",
+                      "iconAlt": "Research Desk mark",
+                      "description": "A personal library for questions, evidence, and connections.",
+                      "configMapName": ""
+                    }
+                  },
+                  "books": {
+                    "type": "object",
+                    "properties": {
+                      "manifestFile": {
+                        "type": "string",
+                        "enum": [
+                          "",
+                          "/private-config/books.json"
+                        ]
+                      },
+                      "planSHA256": {
+                        "type": "string",
+                        "pattern": "^([0-9a-f]{64})?$"
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 10000
+                      }
+                    },
+                    "required": [
+                      "manifestFile",
+                      "planSHA256",
+                      "count"
+                    ],
+                    "default": {
+                      "manifestFile": "",
+                      "planSHA256": "",
+                      "count": 0
+                    }
+                  },
+                  "indexing": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "configMapName": {
+                        "type": "string",
+                        "maxLength": 63,
+                        "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                      },
+                      "directory": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                      },
+                      "credentialEnv": {
+                        "type": "array",
+                        "maxItems": 32,
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "name",
+                            "secretName",
+                            "key"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "pattern": "^RESEARCH_INDEX_[A-Z][A-Z0-9_]{0,80}$"
+                            },
+                            "secretName": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 63,
+                              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                            },
+                            "key": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z0-9_.-]{1,100}$"
+                            }
+                          }
+                        }
+                      },
+                      "nodeSelector": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "resources": {
+                        "type": "object",
+                        "properties": {
+                          "requests": {
+                            "type": "object",
+                            "properties": {
+                              "cpu": {
+                                "type": "string",
+                                "minLength": 1,
+                                "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                              },
+                              "memory": {
+                                "type": "string",
+                                "minLength": 1,
+                                "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                              }
+                            },
+                            "required": [
+                              "cpu",
+                              "memory"
+                            ]
+                          },
+                          "limits": {
+                            "type": "object",
+                            "properties": {
+                              "cpu": {
+                                "type": "string",
+                                "minLength": 1,
+                                "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                              },
+                              "memory": {
+                                "type": "string",
+                                "minLength": 1,
+                                "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                              }
+                            },
+                            "required": [
+                              "cpu",
+                              "memory"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "requests",
+                          "limits"
+                        ]
+                      },
+                      "nasCIDRs": {
+                        "type": "array",
+                        "maxItems": 16,
+                        "items": {
+                          "type": "string",
+                          "pattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"
+                        }
+                      },
+                      "nasPorts": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "items": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 65535
+                        },
+                        "x-kubernetes-list-type": "set"
+                      },
+                      "trustConfigMapName": {
+                        "type": "string",
+                        "maxLength": 63,
+                        "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                      }
+                    },
+                    "required": [
+                      "enabled",
+                      "configMapName",
+                      "directory",
+                      "credentialEnv",
+                      "nodeSelector",
+                      "resources",
+                      "nasCIDRs",
+                      "nasPorts",
+                      "trustConfigMapName"
+                    ],
+                    "default": {
+                      "enabled": false,
+                      "configMapName": "",
+                      "directory": "indexing",
+                      "credentialEnv": [],
+                      "nodeSelector": {},
+                      "resources": {
+                        "requests": {
+                          "cpu": "250m",
+                          "memory": "256Mi"
+                        },
+                        "limits": {
+                          "cpu": "2",
+                          "memory": "2Gi"
+                        }
+                      },
+                      "nasCIDRs": [],
+                      "nasPorts": [
+                        80,
+                        443
+                      ],
+                      "trustConfigMapName": ""
+                    }
+                  }
+                },
+                "required": [
+                  "auth",
+                  "storage"
+                ],
+                "x-kubernetes-validations": [
+                  {
+                    "rule": "!has(self.indexing) || !self.indexing.enabled || size(self.indexing.configMapName) > 0",
+                    "message": "Enabled indexing requires an external collection configuration."
+                  },
+                  {
+                    "rule": "!self.gateway.enabled || (self.auth.publicOrigin == \"https://\" + self.gateway.host && size(self.gateway.parents) > 0)",
+                    "message": "Enabled Gateway host must match the authenticated public origin and have an HTTPS parent."
+                  },
+                  {
+                    "rule": "!self.gateway.enabled || (self.gateway.authorizationEndpoint.startsWith(\"https://\") && self.gateway.tokenEndpoint.startsWith(\"https://\") && self.gateway.endSessionEndpoint.startsWith(\"https://\"))",
+                    "message": "Enabled Gateway requires HTTPS OIDC endpoints."
+                  }
+                ]
+              },
+              "status": {
+                "type": "object",
+                "x-kubernetes-preserve-unknown-fields": true
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+The Research Desk operator watches ResearchDesk resources in {{ .Release.Namespace }} only.
+Use kubectl get researchdesks -n {{ .Release.Namespace }} to inspect reconciliation.
+Existing NAS claims and credential Secrets remain externally owned.
+Before upgrading the CRD, apply the reviewed schema separately. Helm does not upgrade files in crds/.

@@ -1,0 +1,110 @@
+{
+  "image": {
+    "repository": "ghcr.io/example/research-assistant",
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "imagePullSecrets": [],
+  "replicaCount": 1,
+  "storage": {
+    "existingClaim": "",
+    "catalogFile": "catalog.sqlite",
+    "memoryMiB": 512
+  },
+  "auth": {
+    "issuer": "",
+    "audience": "",
+    "allowedSubjects": [],
+    "publicOrigin": "",
+    "originAddress": ""
+  },
+  "inference": {
+    "url": "http://litellm.models.svc.cluster.local:4000/v1/chat/completions",
+    "model": "smart-local",
+    "secretName": "research-litellm",
+    "secretKey": "api-key"
+  },
+  "nas": {
+    "secretName": "research-nas-read",
+    "accessKey": "accesskey",
+    "secretKey": "secretkey",
+    "httpCIDR": "",
+    "endpoint": "",
+    "bucket": "",
+    "pdfPrefix": "",
+    "pdfShards": 0,
+    "region": "us-east-1"
+  },
+  "retrieval": {
+    "rerankURL": "",
+    "embeddingOrigin": "",
+    "vectorOrigin": "",
+    "catalogSHA256": "",
+    "embeddingSHA256": ""
+  },
+  "gateway": {
+    "enabled": false,
+    "host": "",
+    "parents": [],
+    "oidcSecretName": "research-oidc",
+    "authorizationEndpoint": "",
+    "tokenEndpoint": "",
+    "endSessionEndpoint": "",
+    "providerBackend": {
+      "name": "oidc-provider",
+      "namespace": "network",
+      "port": 443
+    },
+    "annotations": {}
+  },
+  "nodeSelector": {},
+  "resources": {
+    "requests": {
+      "cpu": "500m",
+      "memory": "1Gi"
+    },
+    "limits": {
+      "cpu": "2",
+      "memory": "2Gi"
+    }
+  },
+  "network": {
+    "gatewayNamespace": "network",
+    "modelNamespace": "models"
+  },
+  "suspend": true,
+  "legacyDeployment": false,
+  "branding": {
+    "name": "Research Desk",
+    "iconAlt": "Research Desk mark",
+    "description": "A personal library for questions, evidence, and connections.",
+    "configMapName": ""
+  },
+  "books": {
+    "manifestFile": "",
+    "planSHA256": "",
+    "count": 0
+  },
+  "indexing": {
+    "enabled": false,
+    "configMapName": "",
+    "directory": "indexing",
+    "credentialEnv": [],
+    "nodeSelector": {},
+    "resources": {
+      "requests": {
+        "cpu": "250m",
+        "memory": "256Mi"
+      },
+      "limits": {
+        "cpu": "2",
+        "memory": "2Gi"
+      }
+    },
+    "nasCIDRs": [],
+    "nasPorts": [
+      80,
+      443
+    ],
+    "trustConfigMapName": ""
+  }
+}
