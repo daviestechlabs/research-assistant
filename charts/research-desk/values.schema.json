@@ -578,6 +578,11 @@
           "type": "string",
           "maxLength": 63,
           "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "imageDigest": {
+          "type": "string",
+          "pattern": "^$|^sha256:[0-9a-f]{64}$",
+          "description": "Optional immutable worker digest. Empty uses the application image."
         }
       },
       "required": [

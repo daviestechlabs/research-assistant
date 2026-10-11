@@ -21,7 +21,14 @@ type SearchRequest struct {
 	Meaning  bool   `json:"meaning,omitempty"`
 }
 
+type SearchAdjustment struct {
+	Reason       string   `json:"reason"`
+	Terms        []string `json:"terms"`
+	MinimumMatch int      `json:"minimum_match"`
+}
+
 type SearchResponse struct {
+	Adjustment        *SearchAdjustment     `json:"search_adjustment,omitempty"`
 	Documents         []Document            `json:"documents"`
 	ElapsedMS         int64                 `json:"elapsed_ms"`
 	Method            string                `json:"method"`
@@ -109,6 +116,62 @@ func rowsToDocuments(rows [][]string) []Document {
 	return docs
 }
 
+// A deterministic fallback keeps topic retrieval available without a model call.
+// Each term is quoted; user text never becomes FTS query syntax.
+var ioTerm = regexp.MustCompile(`(?i)\bi\s*/\s*o\b`)
+var searchFillers = func() map[string]bool {
+	out := map[string]bool{}
+	for _, word := range strings.Fields("a an the to of for with in on at by from and or that which how what are is can could would should do does please me my find show about") {
+		out[word] = true
+	}
+	return out
+}()
+
+type topicTerm struct{ label, match string }
+
+func topicTerms(query string) []topicTerm {
+	query = ioTerm.ReplaceAllString(query, " researchioterm ")
+	terms := []topicTerm{}
+	seen := map[string]bool{}
+	for _, word := range words.FindAllString(strings.ToLower(query), -1) {
+		if searchFillers[word] || seen[word] {
+			continue
+		}
+		seen[word] = true
+		term := topicTerm{word, `"` + word + `"`}
+		if word == "researchioterm" {
+			term = topicTerm{"I/O", `("i o" OR "input output" OR "io")`}
+		}
+		terms = append(terms, term)
+	}
+	return terms
+}
+
+func topicExpression(terms []topicTerm, broad bool) string {
+	parts := make([]string, len(terms))
+	for n, term := range terms {
+		parts[n] = term.match
+	}
+	if broad {
+		return strings.Join(parts, " OR ")
+	}
+	return strings.Join(parts, " AND ")
+}
+
+// Requiring two distinct terms avoids returning a paper for filler or a lone
+// generic word. The 24-term request bound also bounds this expression.
+func twoTermExpression(terms []topicTerm) string {
+	parts := []string{}
+	for n := 0; n < len(terms)-1; n++ {
+		remaining := []string{}
+		for _, term := range terms[n+1:] {
+			remaining = append(remaining, term.match)
+		}
+		parts = append(parts, "("+terms[n].match+" AND ("+strings.Join(remaining, " OR ")+"))")
+	}
+	return strings.Join(parts, " OR ")
+}
+
 func (d *database) search(q SearchRequest) (SearchResponse, error) {
 	if q.Source == "dnd" {
 		return d.searchBooks(q)
@@ -152,6 +215,11 @@ func (d *database) search(q SearchRequest) (SearchResponse, error) {
 			return result, nil
 		}
 	}
+	if len(ids) > 0 || doiID.MatchString(q.Query) {
+		result.Method = "identifier"
+		result.ElapsedMS = time.Since(start).Milliseconds()
+		return result, nil
+	}
 	tokens := words.FindAllString(q.Query, -1)
 	if len(tokens) == 0 {
 		return result, errors.New("query needs searchable words or an identifier")
@@ -159,25 +227,60 @@ func (d *database) search(q SearchRequest) (SearchResponse, error) {
 	for i, t := range tokens {
 		tokens[i] = `"` + t + `"`
 	}
-	join := " AND "
-	if q.Broad {
-		join = " OR "
-		result.Method = "bm25-broad"
-	}
-	match := strings.Join(tokens, join)
+	terms := topicTerms(q.Query)
+	match := strings.Join(tokens, " AND ")
+	result.Method = "bm25"
 	if q.Source != "gutenberg" {
-		// Paper topics must occur in their supplied abstracts. Title-only and
-		// author-only matches no longer enter candidates for AI ranking.
-		match = "summary : (" + match + ")"
 		result.Method = "abstract-bm25"
-		if q.Broad {
-			result.Method += "-broad"
-		}
 	}
-	// FTS5 rank configuration enables its optimized ordered LIMIT path.
-	rows, err := d.rows("SELECT "+documentColumns+",a.rank FROM abstracts a JOIN documents d ON d.rowid=a.rowid WHERE abstracts MATCH ? AND a.rank MATCH 'bm25(5,2,1,1,3)'"+filter+" ORDER BY a.rank LIMIT ?", append(append([]string{match}, args...), strconv.Itoa(q.Limit))...)
+	if q.Broad {
+		if len(terms) == 0 {
+			result.ElapsedMS = time.Since(start).Milliseconds()
+			return result, nil
+		}
+		match = topicExpression(terms, true)
+		result.Method += "-broad"
+	}
+	searchMatch := func(expression string) ([][]string, error) {
+		if q.Source != "gutenberg" {
+			expression = "summary : (" + expression + ")"
+		}
+		// Use FTS5's optimized ordered LIMIT path with the same filters at every stage.
+		return d.rows("SELECT "+documentColumns+",a.rank FROM abstracts a JOIN documents d ON d.rowid=a.rowid WHERE abstracts MATCH ? AND a.rank MATCH 'bm25(5,2,1,1,3)'"+filter+" ORDER BY a.rank LIMIT ?", append(append([]string{expression}, args...), strconv.Itoa(q.Limit))...)
+	}
+	rows, err := searchMatch(match)
 	if err != nil {
 		return result, err
+	}
+	if len(rows) == 0 && !q.Broad && len(terms) > 0 {
+		normalized := topicExpression(terms, false)
+		if normalized != match {
+			rows, err = searchMatch(normalized)
+			if err != nil {
+				return result, err
+			}
+		}
+		minimum := len(terms)
+		reason := "Removed filler words and normalized technical terms after no exact keyword results."
+		if len(rows) == 0 && len(terms) > 2 {
+			rows, err = searchMatch(twoTermExpression(terms))
+			if err != nil {
+				return result, err
+			}
+			minimum = 2
+			reason = "No exact keyword results. Broadened to abstracts matching at least two topic terms."
+			if q.Source == "gutenberg" {
+				reason = "No exact keyword results. Broadened to catalog records matching at least two topic terms."
+			}
+		}
+		if normalized != match || len(terms) > 2 {
+			labels := make([]string, len(terms))
+			for n, term := range terms {
+				labels[n] = term.label
+			}
+			result.Adjustment = &SearchAdjustment{reason, labels, minimum}
+			result.Method += "-fallback"
+		}
 	}
 	result.Documents = rowsToDocuments(rows)
 	result.ElapsedMS = time.Since(start).Milliseconds()

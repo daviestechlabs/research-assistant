@@ -327,9 +327,10 @@ function route(push){
 }
 function renderSearchResults(value,cached=false){
  el('results').replaceChildren();for(const d of value.documents)el('results').append(resultCard(d));
- if(!value.documents.length){const empty=node('div','','empty-state');empty.append(node('h2','No matching sources'),node('p',value.coverage?'This search covers only the indexed abstracts. Try keyword search to search the complete library.':'Try fewer words, a different phrase, or “Match any word” in Search options.'));el('results').append(empty)}
+ if(!value.documents.length){const empty=node('div','','empty-state');empty.append(node('h2','No matching sources'),node('p',value.coverage?'This search covers only the indexed abstracts. Try keyword search to search the complete library.':'Try “Search abstracts by meaning” or “Explore related terms” in Search options, or use a more specific technical term.'));el('results').append(empty)}
  const method=value.coverage?'Meaning-based abstract search':(value.method==='private-book-catalog'?'Saved D&D book catalog':value.model_calls?'AI-assisted search':'Keyword search');
  el('message').className='message';el('message').textContent=value.documents.length+' result'+(value.documents.length===1?'':'s')+' · '+(value.elapsed_ms/1000).toFixed(3)+' seconds · '+method+(value.queries?' · Related searches: '+value.queries.join(' / '):'');
+ if(value.search_adjustment){const a=value.search_adjustment;el('message').textContent+=' · '+a.reason+' Terms: '+a.terms.join(', ')+'.'}
  if(value.method==='private-book-catalog')el('message').textContent+=' · '+value.evidence_limit;
  if(value.coverage){const c=value.coverage;el('message').textContent+=' · '+c.indexed.toLocaleString()+'/'+c.total.toLocaleString()+' abstracts indexed as of '+new Date(c.updated_at).toLocaleTimeString()+' · '+(c.state==='complete'?'complete coverage':'partial coverage')+' · '+(cached?'cached result · no new model call':(value.embedding_cached?'reused query embedding · no model call':value.model_calls+' embedding call'))+' · Query: “'+value.query+'”. '+value.evidence_limit}
  selectionChanged();

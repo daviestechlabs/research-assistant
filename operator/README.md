@@ -92,3 +92,7 @@ kubectl apply -f charts/research-desk-operator/crds/researchdesks.yaml
 helm upgrade research-operator charts/research-desk-operator \
   --namespace research --values operator/samples/operator-values.yaml --wait
 ```
+
+Set `spec.indexing.imageDigest` to pin a worker during an application update.
+The digest must identify an immutable image in the application repository.
+An empty value uses the application image.

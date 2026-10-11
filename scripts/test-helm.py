@@ -59,3 +59,12 @@ policy=next(item for item in resources if item['kind']=='NetworkPolicy' and item
 assert policy['ingress']==[]
 assert 4000 not in [port['port'] for rule in policy['egress'] for port in rule.get('ports',[])]
 print('Index worker rendering, private configuration mounts, credential boundary, and restricted network checks pass.')
+
+worker_digest = 'sha256:' + '1' * 64
+worker_values = copy.deepcopy(values)
+worker_values['indexing'] = {**json.loads((root/'charts/research-desk/values.yaml').read_text())['indexing'], **worker_values.get('indexing', {}), 'enabled':True, 'configMapName':'collections', 'imageDigest':worker_digest}
+jsonschema.validate(worker_values, schema)
+rendered = subprocess.check_output([args.helm, 'template', 'research-desk', str(root/'charts/research-desk'), '-n', 'research', '-f', '-'], input=json.dumps(worker_values), text=True)
+worker = next(r for r in yaml.safe_load_all(rendered) if r and r['kind']=='Deployment' and r['metadata']['name'].endswith('-indexer'))
+assert worker['spec']['template']['spec']['containers'][0]['image']==values['image']['repository']+'@'+worker_digest
+print('Independent immutable worker image rendering passes.')

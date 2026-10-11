@@ -41,7 +41,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: indexer
-          image: {{ printf "%s@%s" .Values.image.repository .Values.image.digest | quote }}
+          image: {{ printf "%s@%s" .Values.image.repository (.Values.indexing.imageDigest | default .Values.image.digest) | quote }}
           args: [index-worker]
           # No chat key, OIDC configuration, or Kubernetes token reaches this worker.
           env:

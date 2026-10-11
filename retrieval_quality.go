@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const retrievalContract = "paired-full-abstract-retrieval-v1"
+const retrievalContract = "paired-full-abstract-retrieval-keyword-fallback-v2"
 
 type retrievalHit struct {
 	ID          string `json:"id"`
@@ -64,6 +64,7 @@ func retrievalLimits() []string {
 	return []string{
 		"Both methods search the same complete supplied arXiv abstract corpus, with the same unfiltered queries and ten-result limit.",
 		"The eight reused development queries have one curated target each. Target rank is not a judgment of every returned paper's relevance.",
+		"Keyword retrieval keeps strict matches, then removes filler and requires two topic terms when a longer query has no matches.",
 		"Four keyword queries and four paraphrase queries are reported separately. These measurements do not estimate corpus-wide accuracy or independent held-out performance.",
 		"Meaning search uses the application's complete query windows, cosine vector search, and saved abstract fingerprint checks. No reranker, query expansion, PDF reading, or chat model is used.",
 		"The verified embedding artifact fingerprint binds this index contract. This report does not prove the weights loaded by every future engine process.",

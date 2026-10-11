@@ -10,6 +10,7 @@ Research Desk Operator installs the desk through a Kubernetes `ResearchDesk` res
 ## Features
 
 - Search abstracts with SQLite FTS5 or look up exact identifiers.
+- Empty searches remove filler words, normalize I/O, and retry with two topic terms.
 - Optional reranking, question expansion, and semantic retrieval.
 - Saved sessions, research notes, progress, cancellation, and durable jobs.
 - Learn, Compare, and Connect ideas with source citations and evidence checks.
@@ -44,6 +45,7 @@ Its two records are synthetic and contain no real scientific findings.
 Import accepts JSON lines, Gutenberg CSV, and gzip files.
 Paper records use the supplied `abstract` field.
 Search does not read PDFs or call a model by default.
+Broader results show their search terms and retain all filters.
 
 ```sh
 ./research-assistant search --db /absolute/path/catalog.sqlite --query geology
