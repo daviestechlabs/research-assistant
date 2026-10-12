@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -42,5 +43,15 @@ func TestOfflineAbstractWindowsKeepOnlineQueryBound(t *testing.T) {
 	}
 	if _, err := exactAbstractWindows(text, "wrong", 128, 2, [][]int{{0, 6}}); err == nil {
 		t.Fatal("source identity changed")
+	}
+}
+
+func TestMeaningResumeRequiresPreviouslyReconciledCounts(t *testing.T) {
+	for _, value := range []any{nil, false, "true"} {
+		m := &indexManager{}
+		state := &indexState{Validation: map[string]any{"counts_reconciled": value}}
+		if err := m.indexMeaning(context.Background(), indexRun{}, state); err == nil || err.Error() != "meaning indexing requires reconciled catalog counts" {
+			t.Fatal("Unverified counters accepted", err)
+		}
 	}
 }

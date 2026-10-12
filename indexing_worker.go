@@ -605,6 +605,9 @@ func (m *indexManager) prepareCandidate(ctx context.Context, run indexRun, s *in
 // Reuse the application's exact full-text embedding contract. The worker has
 // its own bounded gate and no Qwen key, daily allowance, or chat reservation.
 func (m *indexManager) indexMeaning(ctx context.Context, run indexRun, s *indexState) error {
+	if reconciled, _ := s.Validation["counts_reconciled"].(bool); !reconciled {
+		return errors.New("meaning indexing requires reconciled catalog counts")
+	}
 	if s.Candidate == nil || !shaPattern.MatchString(m.config.ModelSHA) {
 		return errors.New("meaning candidate identity is missing")
 	}
@@ -620,7 +623,9 @@ func (m *indexManager) indexMeaning(ctx context.Context, run indexRun, s *indexS
 		return e
 	}
 	defer d.close()
-	rows, e := d.rows("SELECT count(*),sum(summary='') FROM documents WHERE source='arxiv'")
+	// Keyword validation independently reconciles these counters with source rows.
+	// A resume must not scan every abstract again before reading its saved cursor.
+	rows, e := d.rows("SELECT documents,missing_summaries FROM catalog_stats WHERE source='arxiv'")
 	if e != nil || len(rows) != 1 || rows[0][0] == "0" || rows[0][1] != "0" {
 		return errors.New("meaning indexing requires complete supplied arXiv abstracts")
 	}
