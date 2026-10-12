@@ -19,7 +19,7 @@ func indexEmbedParts(ctx context.Context, s *semanticClient, parts []string) ([]
 		if e := s.call(ctx, s.embeddingOrigin, "/tokenize", map[string]any{"model": "bge-m3", "input": part}, &tokens); e != nil {
 			return nil, e
 		}
-		w, e := exactQueryWindows(part, tokens.SHA, tokens.Max, tokens.Special, tokens.Offsets)
+		w, e := exactAbstractWindows(part, tokens.SHA, tokens.Max, tokens.Special, tokens.Offsets)
 		if e != nil {
 			return nil, e
 		}

@@ -221,9 +221,21 @@ type queryWindow struct {
 	weight int
 }
 
+// Search questions retain their small online request bound.
 func exactQueryWindows(query string, inputSHA string, maxTokens, special int, offsets [][]int) ([]queryWindow, error) {
+	return exactTokenWindows(query, inputSHA, maxTokens, special, offsets, 4096, 8)
+}
+
+// Offline abstract indexing uses the tokenizer's bounded offset contract.
+// Window width, overlap, and weighting match the existing offline index.
+// This changes admission only; saved vectors retain their model identity.
+func exactAbstractWindows(text string, inputSHA string, maxTokens, special int, offsets [][]int) ([]queryWindow, error) {
+	return exactTokenWindows(text, inputSHA, maxTokens, special, offsets, 131072, 1366)
+}
+
+func exactTokenWindows(query string, inputSHA string, maxTokens, special int, offsets [][]int, maxOffsets, maxWindows int) ([]queryWindow, error) {
 	chars := []rune(query)
-	if inputSHA != textSHA([]byte(query)) || maxTokens != 128 || special != 2 || len(offsets) == 0 || len(offsets) > 4096 {
+	if inputSHA != textSHA([]byte(query)) || maxTokens != 128 || special != 2 || len(offsets) == 0 || len(offsets) > maxOffsets {
 		return nil, errors.New("query tokenizer identity or bounds changed")
 	}
 	prevStart, prevEnd := 0, 0
@@ -247,7 +259,7 @@ func exactQueryWindows(query string, inputSHA string, maxTokens, special int, of
 			break
 		}
 	}
-	if len(windows) > 8 || covered != len(offsets) {
+	if len(windows) > maxWindows || covered != len(offsets) {
 		return nil, errors.New("complete query exceeds bounded embedding windows")
 	}
 	return windows, nil

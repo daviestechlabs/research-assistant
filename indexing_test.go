@@ -315,7 +315,7 @@ func TestIndexingBatchCheckpointSurvivesJSONLag(t *testing.T) {
 func TestIndexingCompleteMeaningAndIndependentCount(t *testing.T) {
 	for _, wrongCount := range []bool{false, true} {
 		t.Run(fmt.Sprint(wrongCount), func(t *testing.T) {
-			papers := []byte(`{"id":"2401.00001","title":"Geology","abstract":"` + strings.Repeat("Grounded abstract text. ", 20) + `"}` + "\n")
+			papers := []byte(`{"id":"2401.00001","title":"Geology","abstract":"` + strings.Repeat("Grounded abstract text. ", 45) + `"}` + "\n")
 			storage := indexFixtureStore(t, map[string][]byte{"papers.jsonl": papers})
 			m, _ := indexFixtureManager(t, storage, "jsonl", "papers.jsonl")
 			vectorIDs := map[string]bool{}
