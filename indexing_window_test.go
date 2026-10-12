@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -53,5 +54,23 @@ func TestMeaningResumeRequiresPreviouslyReconciledCounts(t *testing.T) {
 		if err := m.indexMeaning(context.Background(), indexRun{}, state); err == nil || err.Error() != "meaning indexing requires reconciled catalog counts" {
 			t.Fatal("Unverified counters accepted", err)
 		}
+	}
+}
+
+func TestWorkerShutdownPreservesCheckpointPause(t *testing.T) {
+	transport := errors.New("semantic service request failed or exceeded its deadline")
+	if got := indexWorkerOutcome(context.Background(), transport); got != transport {
+		t.Fatal("Real transport failure hidden")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !errors.Is(indexWorkerOutcome(ctx, transport), errIndexPause) {
+		t.Fatal("Shutdown transport cancellation recorded as a failed run")
+	}
+	if !errors.Is(indexWorkerOutcome(ctx, errIndexCancel), errIndexCancel) {
+		t.Fatal("User cancellation changed")
+	}
+	if indexWorkerOutcome(ctx, nil) != nil {
+		t.Fatal("Completed work changed into a pause")
 	}
 }

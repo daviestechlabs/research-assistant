@@ -105,6 +105,7 @@ func indexingWorker() error {
 			if e = readIndexJSON(m.runPath(s.ID, "request.json"), &run); e == nil {
 				e = m.execute(ctx, run, &s)
 			}
+			e = indexWorkerOutcome(ctx, e)
 			if e != nil {
 				s.Status = "failed"
 				s.Error = "Indexing failed. Check the worker receipt and configured source snapshot."
@@ -127,6 +128,16 @@ func indexingWorker() error {
 	}
 	return nil
 }
+
+// A cancelled service request during worker shutdown is a resumable pause.
+// Service adapters deliberately hide transport details, so use the parent context.
+func indexWorkerOutcome(ctx context.Context, err error) error {
+	if err != nil && ctx.Err() != nil && !errors.Is(err, errIndexCancel) {
+		return errIndexPause
+	}
+	return err
+}
+
 func indexSafeError(e error) string {
 	// Adapter and SQLite errors can include private object paths or source text.
 	// Keep user-facing messages and worker logs free of those values.
