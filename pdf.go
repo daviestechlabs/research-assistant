@@ -59,6 +59,13 @@ type pdfArchive struct {
 func newPDFArchive() (*pdfArchive, error) {
 	access, secret := os.Getenv("RESEARCH_S3_ACCESS_KEY"), os.Getenv("RESEARCH_S3_SECRET_KEY")
 	if access == "" && secret == "" {
+		if syncRoot() != "" {
+			books, err := approvedBooks()
+			if err != nil {
+				return nil, err
+			}
+			return &pdfArchive{books: books, busy: make(chan struct{}, 1)}, nil
+		}
 		return nil, nil
 	}
 	if access == "" || secret == "" {

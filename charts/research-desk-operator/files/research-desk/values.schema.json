@@ -583,6 +583,9 @@
           "type": "string",
           "pattern": "^$|^sha256:[0-9a-f]{64}$",
           "description": "Optional immutable worker digest. Empty uses the application image."
+        },
+        "arxivUpdatesEnabled": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -614,6 +617,121 @@
           }
         }
       ]
+    },
+    "arxivSync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "imageDigest",
+        "directory",
+        "fromDate",
+        "schedule",
+        "timeZone",
+        "maxPages",
+        "maxPDFs",
+        "maxDownloadMiB",
+        "nodeSelector",
+        "resources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "imageDigest": {
+          "type": "string",
+          "pattern": "^$|^sha256:[0-9a-f]{64}$"
+        },
+        "directory": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        },
+        "fromDate": {
+          "type": "string",
+          "pattern": "^$|^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "schedule": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 100
+        },
+        "timeZone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "maxPages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "maxPDFs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20000
+        },
+        "maxDownloadMiB": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 131072
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requests": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                },
+                "memory": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                }
+              },
+              "required": [
+                "cpu",
+                "memory"
+              ]
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                },
+                "memory": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|K|M|G|T)?$"
+                }
+              },
+              "required": [
+                "cpu",
+                "memory"
+              ]
+            }
+          },
+          "required": [
+            "requests",
+            "limits"
+          ]
+        }
+      }
     }
   },
   "required": [
@@ -625,5 +743,34 @@
     "retrieval",
     "resources",
     "network"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "arxivSync": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arxivSync": {
+            "properties": {
+              "imageDigest": {
+                "minLength": 71
+              },
+              "fromDate": {
+                "minLength": 10
+              }
+            }
+          }
+        }
+      }
+    }
   ]
 }

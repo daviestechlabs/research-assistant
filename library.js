@@ -28,6 +28,12 @@
         $('index-meaning').disabled = !snapshot.meaning_available; $('index-meaning').checked = snapshot.meaning_available;
       }
       const runs = snapshot.runs || []; $('index-runs').replaceChildren();
+	  const sync = snapshot.arxiv_sync;
+	  $('arxiv-sync-panel').hidden = !sync;
+	  if (sync) {
+	    $('arxiv-sync-status').textContent = sync.state.replaceAll('-', ' ') + ' · ' + number(sync.saved_pdfs) + ' saved PDFs · ' + number(sync.pending_pdfs) + ' waiting · ' + number(sync.unavailable_pdfs) + ' unavailable or too large' + (sync.updated ? ' · checked ' + new Date(sync.updated).toLocaleString() : '');
+	    $('index-arxiv-update').disabled = busy || !snapshot.arxiv_updates_enabled || runs.some(run => !['ready', 'complete', 'cancelled'].includes(run.status)) || snapshot.active === 'original';
+	  }
       for (const run of runs) {
         const card = node('article', undefined, 'index-run');
         card.append(node('h3', run.status === 'ready' ? 'Validated candidate' : run.phase.replaceAll('-', ' ')), node('p', run.status + ' · ' + new Date(run.updated).toLocaleString(), 'index-meta'));
@@ -82,6 +88,12 @@
   $('close-indexing').addEventListener('click', () => dialog.close()); dialog.addEventListener('close', () => clearInterval(timer));
   $('index-inventory').addEventListener('click', () => submit('inventory'));
   $('index-rebuild').addEventListener('click', () => submit('rebuild'));
+	$('index-arxiv-update').addEventListener('click', async () => {
+	  if (busy) return; busy = true;
+	  try { await request('/api/library/indexing', {kind: 'arxiv-update', collections: [], meaning: true}); $('indexing-status').textContent = 'Update candidate queued. Existing papers stay saved; unchanged vectors are reused. Review validation before activating.'; }
+	  catch (e) { error(e); } finally { busy = false; }
+	  await refresh();
+	});
   $('index-rollback').addEventListener('click', () => change('previous', 'rollback'));
   request('/api/stats').then(stats => { $('open-indexing').hidden = !stats.indexing_enabled; }).catch(() => {});
 })();

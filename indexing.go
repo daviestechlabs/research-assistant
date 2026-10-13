@@ -3,6 +3,7 @@ package main
 // Indexing is an offline plane. The browser selects configured collection IDs;
 // it never supplies URLs, credentials, file paths, SQL, or executable commands.
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -353,7 +354,14 @@ func (m *indexManager) submit(kind string, ids []string, meaning bool) (indexSta
 		return state, e
 	}
 	defer indexUnlock(lock)
-	if kind != "inventory" && kind != "rebuild" || len(ids) < 1 || len(ids) > 32 {
+	update := kind == "arxiv-update"
+	if update && os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") != "true" {
+		return state, errors.New("the indexing worker must enable arXiv updates after the current rebuild finishes")
+	}
+	if update && (syncRoot() == "" || len(ids) != 0 || !meaning) {
+		return state, errors.New("arXiv updates require configured harvesting and meaning search")
+	}
+	if !update && kind != "inventory" && kind != "rebuild" || !update && len(ids) < 1 || len(ids) > 32 {
 		return state, errors.New("choose inventory or rebuild and configured collections")
 	}
 	seen := map[string]bool{}
@@ -374,6 +382,17 @@ func (m *indexManager) submit(kind string, ids []string, meaning bool) (indexSta
 	}
 	if meaning && m.config.ModelSHA == "" {
 		return state, errors.New("offline meaning indexing is not configured")
+	}
+	if update {
+		var coverage SemanticCoverage
+		if readIndexJSON(m.base.Semantic, &coverage) != nil || coverage.State != "complete" || coverage.VerifiedCount != coverage.Total || coverage.Indexed != coverage.Total || coverage.Total < 1 || coverage.CatalogSHA != m.base.SHA || coverage.ModelSHA != m.config.ModelSHA || coverage.Algorithm != semanticAlgorithm || coverage.Dimensions != semanticDimensions || coverage.Collection != semanticCollection(m.base.SHA, m.config.ModelSHA) {
+			return state, errors.New("finish and activate the complete meaning catalog before merging arXiv updates")
+		}
+		expected, _ := json.Marshal(semanticEngine())
+		actual, _ := json.Marshal(coverage.Engine)
+		if string(expected) != string(actual) {
+			return state, errors.New("active embedding contract changed")
+		}
 	}
 	if kind == "rebuild" {
 		sources := map[string]bool{}
@@ -409,6 +428,13 @@ func (m *indexManager) submit(kind string, ids []string, meaning bool) (indexSta
 		return state, e
 	}
 	defer os.RemoveAll(staged)
+	if update {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if e = freezeArxivUpdates(ctx, filepath.Join(staged, "updates.sqlite")); e != nil {
+			return state, e
+		}
+	}
 	run := indexRun{ID: id, Kind: kind, Collections: ids, Meaning: meaning, ConfigSHA: m.configSHA, Base: m.base, Created: indexTime()}
 	state = indexState{ID: id, Status: "queued", Phase: "inventory", Updated: indexTime()}
 	if e = writeIndexJSON(filepath.Join(staged, "request.json"), run); e != nil {
@@ -572,7 +598,7 @@ func (m *indexManager) routes(mux *http.ServeMux) {
 		if readIndexJSON(filepath.Join(m.root, "active.json"), &a) != nil {
 			a.Current = m.base
 		}
-		writeJSON(w, 200, map[string]any{"collections": collections, "runs": states, "active": a.Current.ID, "rollback_available": a.Previous != nil, "meaning_available": m.config.ModelSHA != "", "worker_heartbeat": indexHeartbeat(m.root)})
+		writeJSON(w, 200, map[string]any{"collections": collections, "runs": states, "active": a.Current.ID, "rollback_available": a.Previous != nil, "meaning_available": m.config.ModelSHA != "", "worker_heartbeat": indexHeartbeat(m.root), "arxiv_sync": syncPublicStatus(), "arxiv_updates_enabled": os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") == "true"})
 	}))
 	mux.HandleFunc("POST /api/library/indexing", wrap(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {

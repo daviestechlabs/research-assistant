@@ -45,6 +45,10 @@ spec:
           args: [index-worker]
           # No chat key, OIDC configuration, or Kubernetes token reaches this worker.
           env:
+            {{- if and .Values.arxivSync.enabled .Values.indexing.arxivUpdatesEnabled }}
+            - name: RESEARCH_ARXIV_SYNC_ROOT
+              value: {{ printf "/catalog/%s" .Values.arxivSync.directory | quote }}
+            {{- end }}
             {{- if .Values.indexing.trustConfigMapName }}
             - name: SSL_CERT_FILE
               value: /index-trust/ca.crt

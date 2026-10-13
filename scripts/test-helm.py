@@ -68,3 +68,23 @@ rendered = subprocess.check_output([args.helm, 'template', 'research-desk', str(
 worker = next(r for r in yaml.safe_load_all(rendered) if r and r['kind']=='Deployment' and r['metadata']['name'].endswith('-indexer'))
 assert worker['spec']['template']['spec']['containers'][0]['image']==values['image']['repository']+'@'+worker_digest
 print('Independent immutable worker image rendering passes.')
+
+sync_values = copy.deepcopy(worker_values)
+sync_values['arxivSync'] = {**json.loads((root/'charts/research-desk/values.yaml').read_text())['arxivSync'], 'enabled':True, 'imageDigest':'sha256:'+'2'*64, 'fromDate':'2026-01-01'}
+jsonschema.validate(sync_values, schema)
+text = subprocess.check_output([args.helm,'template','research-desk',str(root/'charts/research-desk'),'-n','research','-f','-'],input=json.dumps(sync_values),text=True)
+sync_resources = [r for r in yaml.safe_load_all(text) if r]
+cron = next(r for r in sync_resources if r['kind']=='CronJob')
+assert cron['spec']['concurrencyPolicy']=='Forbid'
+sync_pod = cron['spec']['jobTemplate']['spec']['template']['spec']
+assert not sync_pod['automountServiceAccountToken']
+assert not sync_pod['containers'][0].get('envFrom') and not sync_pod['containers'][0].get('env')
+assert sync_pod['containers'][0]['image'].endswith('@'+'sha256:'+'2'*64)
+sync_worker = next(r for r in sync_resources if r['kind']=='Deployment' and r['metadata']['name'].endswith('-indexer'))
+assert sync_worker['spec']['template'] == worker['spec']['template'], 'Enabling downloads restarted the existing indexing worker'
+for key, change in [('imageDigest','latest'),('directory','../escape'),('maxDownloadMiB',131073),('fromDate','')]:
+    bad = copy.deepcopy(sync_values); bad['arxivSync'][key]=change
+    try: jsonschema.validate(bad, schema)
+    except jsonschema.ValidationError: continue
+    raise AssertionError('Unsafe arXiv sync field accepted: '+key)
+print('Scheduled arXiv updates, immutable images, no credentials, bounded storage, and unchanged indexer rendering pass.')

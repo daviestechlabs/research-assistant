@@ -45,6 +45,7 @@ type semanticClient struct {
 	diskInfo                                  os.FileInfo
 	total                                     int
 	client                                    *http.Client
+	responseLimit                             int64 // Offline vector copying only; online requests retain one MiB.
 }
 
 var shaPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -191,8 +192,12 @@ func (s *semanticClient) call(ctx context.Context, origin, path string, body any
 	if r.StatusCode != 200 {
 		return fmt.Errorf("semantic service returned HTTP %d", r.StatusCode)
 	}
-	b, err := io.ReadAll(io.LimitReader(r.Body, 1<<20+1))
-	if err != nil || len(b) > 1<<20 {
+	limit := int64(1 << 20)
+	if s.responseLimit > 0 && s.responseLimit <= 4<<20 {
+		limit = s.responseLimit
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	if err != nil || int64(len(b)) > limit {
 		return errors.New("semantic service response exceeds bounds")
 	}
 	if json.Unmarshal(b, out) != nil {

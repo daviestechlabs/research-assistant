@@ -40,6 +40,7 @@ def generated_crd():
         storage["properties"][key]["default"] = values["storage"][key]
     schema["required"] = ["auth", "storage"]
     schema["x-kubernetes-validations"] = [
+        {"rule": '!has(self.arxivSync) || !self.arxivSync.enabled || (size(self.arxivSync.imageDigest) == 71 && size(self.arxivSync.fromDate) == 10)', "message": "Enabled arXiv sync requires an immutable image and initial coverage date."},
         {"rule": '!has(self.indexing) || !self.indexing.enabled || size(self.indexing.configMapName) > 0', "message": "Enabled indexing requires an external collection configuration."},
         {
             "rule": '!self.gateway.enabled || (self.auth.publicOrigin == "https://" + self.gateway.host && size(self.gateway.parents) > 0)',

@@ -166,6 +166,9 @@ func (m *indexManager) selected(run indexRun) ([]indexCollection, error) {
 	return out, nil
 }
 func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState) error {
+	if run.Kind == "arxiv-update" {
+		return m.executeArxivUpdate(ctx, run, s)
+	}
 	collections, e := m.selected(run)
 	if e != nil {
 		return e
@@ -623,6 +626,9 @@ func (m *indexManager) indexMeaning(ctx context.Context, run indexRun, s *indexS
 		return errors.New("meaning candidate identity is missing")
 	}
 	sc := &semanticClient{embeddingOrigin: m.config.EmbeddingOrigin, milvusOrigin: m.config.VectorOrigin, modelSHA: m.config.ModelSHA, catalogSHA: s.Candidate.SHA, collection: semanticCollection(s.Candidate.SHA, m.config.ModelSHA), client: &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("model redirects disabled") }}}
+	if run.Kind == "arxiv-update" {
+		sc.responseLimit = 4 << 20
+	}
 	if e := sc.health(ctx); e != nil {
 		return e
 	}
@@ -647,7 +653,11 @@ func (m *indexManager) indexMeaning(ctx context.Context, run indexRun, s *indexS
 		if e = m.checkControl(ctx, s.ID); e != nil {
 			return e
 		}
-		batch, e := d.rows("SELECT rowid,id,summary,fingerprint,categories,published FROM documents WHERE source='arxiv' AND rowid>? ORDER BY rowid LIMIT 8", strconv.FormatInt(s.LastVectorRow, 10))
+		batchSize := 8
+		if run.Kind == "arxiv-update" {
+			batchSize = 128
+		}
+		batch, e := d.rows("SELECT rowid,id,summary,fingerprint,categories,published FROM documents WHERE source='arxiv' AND rowid>? ORDER BY rowid LIMIT ?", strconv.FormatInt(s.LastVectorRow, 10), strconv.Itoa(batchSize))
 		if e != nil {
 			return e
 		}
@@ -715,7 +725,11 @@ func (m *indexManager) indexMeaning(ctx context.Context, run indexRun, s *indexS
 		if e = writeIndexJSON(statusPath, status); e != nil {
 			return e
 		}
-		delay := time.Duration(len(batch))*time.Second/time.Duration(m.config.DocumentsPerSecond) - time.Since(begin)
+		paced := int64(len(batch))
+		if run.Kind == "arxiv-update" {
+			paced = newEmbeddings
+		}
+		delay := time.Duration(paced)*time.Second/time.Duration(m.config.DocumentsPerSecond) - time.Since(begin)
 		if delay > 0 {
 			timer := time.NewTimer(delay)
 			select {

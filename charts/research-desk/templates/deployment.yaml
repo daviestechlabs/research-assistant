@@ -46,6 +46,12 @@ spec:
             - configMapRef:
                 name: {{ include "desk.configName" . }}
           env:
+            {{- if .Values.arxivSync.enabled }}
+            - name: RESEARCH_ARXIV_SYNC_ROOT
+              value: {{ printf "/catalog/%s" .Values.arxivSync.directory | quote }}
+            - name: RESEARCH_ARXIV_UPDATES_ENABLED
+              value: {{ .Values.indexing.arxivUpdatesEnabled | quote }}
+            {{- end }}
             - name: RESEARCH_MODEL_KEY
               valueFrom:
                 secretKeyRef:

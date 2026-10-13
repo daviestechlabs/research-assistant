@@ -63,6 +63,9 @@ func run(args []string) error {
 		return errors.New("use import, search, answer, read, graph, serve, stats, verify, model-identity, check-page-evidence, check-pdf, check-reading, or check-tools; catalog commands require --db")
 	}
 	command := args[0]
+	if command == "arxiv-sync" {
+		return runArxivSync(args[1:])
+	}
 	if command == "index-worker" {
 		return indexingWorker()
 	}

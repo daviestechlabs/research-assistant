@@ -120,6 +120,15 @@ func (d *database) searchBooks(q SearchRequest) (SearchResponse, error) {
 
 func (a *pdfArchive) readSourcePDF(ctx context.Context, id string) (savedPDF, error) {
 	if strings.HasPrefix(id, "arxiv:") {
+		if root := syncRoot(); root != "" {
+			pdf, err := readSyncPDF(ctx, root, id)
+			if !errors.Is(err, errPDFMissing) {
+				return pdf, err
+			}
+		}
+		if a.endpoint == "" {
+			return savedPDF{}, errPDFMissing
+		}
 		return a.readPDF(ctx, strings.TrimPrefix(id, "arxiv:"))
 	}
 	book, ok := a.books[id]

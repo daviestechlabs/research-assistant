@@ -1,5 +1,7 @@
 # Library indexing
 
+[New arXiv papers](arxiv-updates.md) describes incremental harvesting, saved PDFs, and update candidates.
+
 Library controls manage an offline worker. The worker stores its queue and checkpoints on the catalog volume.
 The browser sends configured collection IDs. It cannot send storage addresses, credentials, paths, or commands.
 Only configured administrators can use these controls. Search and research retain their existing authentication rules.
