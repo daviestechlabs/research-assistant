@@ -320,6 +320,8 @@ func TestIndexingCompleteMeaningAndIndependentCount(t *testing.T) {
 			m, _ := indexFixtureManager(t, storage, "jsonl", "papers.jsonl")
 			vectorIDs := map[string]bool{}
 			embeddings := 0
+			flushes, upserts := 0, 0
+			collection := ""
 			engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("Authorization") != "" {
 					t.Error("chat credentials reached indexing engine")
@@ -353,8 +355,10 @@ func TestIndexingCompleteMeaningAndIndependentCount(t *testing.T) {
 					}
 					writeJSON(w, 200, map[string]any{"model": "bge-m3", "input_contract": map[string]any{"truncated": false, "pooling": "cls", "max_input_tokens": 128, "input_tokens": counts}, "data": data})
 				case "/v2/vectordb/collections/has":
+					collection, _ = body["collectionName"].(string)
 					writeJSON(w, 200, map[string]any{"code": 0, "data": map[string]bool{"has": false}})
 				case "/v2/vectordb/entities/upsert":
+					upserts++
 					ids := []string{}
 					for _, row := range body["data"].([]any) {
 						id := row.(map[string]any)["id"].(string)
@@ -362,6 +366,18 @@ func TestIndexingCompleteMeaningAndIndependentCount(t *testing.T) {
 						vectorIDs[id] = true
 					}
 					writeJSON(w, 200, map[string]any{"code": 0, "data": map[string]any{"upsertCount": len(ids), "upsertIds": ids}})
+				case "/v2/vectordb/collections/flush":
+					flushes++
+					if _, plural := body["collectionNames"]; plural || collection == "" || body["collectionName"] != collection {
+						t.Error("flush does not target the candidate collection")
+						writeJSON(w, 200, map[string]any{"code": 1802})
+						return
+					}
+					if flushes == 1 {
+						writeJSON(w, 200, map[string]any{"code": 1802})
+						return
+					}
+					writeJSON(w, 200, map[string]any{"code": 0})
 				case "/v2/vectordb/entities/query":
 					count := len(vectorIDs)
 					if wrongCount {
@@ -387,6 +403,19 @@ func TestIndexingCompleteMeaningAndIndependentCount(t *testing.T) {
 			var run indexRun
 			readIndexJSON(m.runPath(s.ID, "request.json"), &run)
 			e = m.execute(context.Background(), run, &s)
+			if e == nil || s.Status == "ready" || s.Vectors != 1 || s.LastVectorRow < 1 || s.Candidate.ModelSHA != "" {
+				t.Fatal("flush failure did not preserve an unverified checkpoint", e)
+			}
+			beforeEmbeddings, beforeUpserts, candidate := embeddings, upserts, *s.Candidate
+			lastRow := s.LastVectorRow
+			// Read the durable checkpoint, as a replacement worker does after failure.
+			if e = readIndexJSON(m.runPath(s.ID, "state.json"), &s); e != nil {
+				t.Fatal(e)
+			}
+			e = m.execute(context.Background(), run, &s)
+			if embeddings != beforeEmbeddings || upserts != beforeUpserts || s.Candidate.ID != candidate.ID || s.Candidate.SHA != candidate.SHA || s.Vectors != 1 || s.LastVectorRow != lastRow || flushes != 2 {
+				t.Fatal("final verification resume repeated vector work or replaced the candidate")
+			}
 			if wrongCount {
 				if e == nil || s.Status == "ready" {
 					t.Fatal("unverified vector coverage accepted")

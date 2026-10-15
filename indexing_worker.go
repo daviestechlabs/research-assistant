@@ -743,7 +743,7 @@ func (m *indexManager) indexMeaning(ctx context.Context, run indexRun, s *indexS
 	if int(s.Vectors) != total {
 		return errors.New("vector checkpoint count does not match catalog")
 	}
-	if e = indexMilvus(ctx, sc, "/v2/vectordb/collections/flush", map[string]any{"collectionNames": []string{sc.collection}}); e != nil {
+	if e = indexMilvus(ctx, sc, "/v2/vectordb/collections/flush", map[string]any{"collectionName": sc.collection}); e != nil {
 		return e
 	}
 	var count struct {
