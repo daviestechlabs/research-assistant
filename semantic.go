@@ -39,6 +39,7 @@ type SemanticCoverage struct {
 }
 
 type semanticClient struct {
+	pg                                        *postgresCatalog
 	embeddingOrigin, milvusOrigin, statusPath string
 	catalogSHA, modelSHA, collection          string
 	diskPath                                  string
@@ -100,6 +101,18 @@ func newSemantic(i *inference) (*semanticClient, error) {
 	if _, err = fmt.Sscan(rows[0][0], &s.total); err != nil || s.total < 1 {
 		return nil, errors.New("semantic catalog count is invalid")
 	}
+	if i.db.pg != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		identity, e := i.db.pg.identity(ctx)
+		if e != nil || identity != catalog {
+			return nil, errors.New("PostgreSQL catalog identity does not match the index")
+		}
+		s.pg = i.db.pg
+		s.diskPath = ""
+		return s, nil
+	}
+
 	f, err := os.Open(s.diskPath)
 	if err != nil {
 		return nil, errors.New("semantic catalog snapshot unavailable")
@@ -128,6 +141,15 @@ func (s *semanticClient) coverage() (SemanticCoverage, error) {
 	var status SemanticCoverage
 	if s == nil {
 		return status, errors.New("meaning-based search is not configured")
+	}
+
+	if s.pg != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		identity, e := s.pg.identity(ctx)
+		if e != nil || identity != s.catalogSHA {
+			return status, errors.New("PostgreSQL catalog snapshot changed")
+		}
 	}
 	if s.diskPath != "" {
 		info, err := os.Stat(s.diskPath)

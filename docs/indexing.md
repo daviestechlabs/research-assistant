@@ -114,7 +114,7 @@ Pause stops at a durable batch checkpoint. Resume continues that run with the sa
 A changed source snapshot or configuration requires a new run. Cancel releases the run without deleting its receipts or candidate.
 Only one unfinished run can exist. The worker holds a filesystem lock to prevent competing workers.
 
-Validation checks SQLite, the keyword index, actual source counts, source accounting, ID queries, and an abstract keyword query.
+Validation checks backend integrity, keyword indexes, actual source counts, source accounting, ID queries, and an abstract query.
 Conflicting records with the same ID fail the run. Identical duplicates receive one catalog entry and a duplicate count.
 The receipt reports added, removed, and changed IDs against the previous catalog.
 
@@ -155,7 +155,7 @@ It does not write source objects or vectors. Use it to verify an adapter before 
 
 Enable `ResearchDesk.spec.indexing.retention.enabled` to keep the live catalog and one previous catalog.
 Cleanup runs every minute after the application opens the active generation.
-It retires older managed catalog files, frozen update snapshots, and their exact vector collections.
+It retires older managed catalog files, PostgreSQL generation schemas, frozen update snapshots, and their exact vector collections.
 Unfinished runs and their parent catalogs stay protected.
 Small run receipts remain for audit and restart recovery.
 Library shows the policy and any cleanup error.
@@ -180,7 +180,9 @@ One work tick represents a callback interval of 10,000 SQLite virtual-machine in
 Ticks show observed database execution, not processed rows or a completion percentage.
 The last-advance timestamp changes when ticks increase or the validation stage changes.
 The receipt timestamp shows the observer heartbeat separately.
-Checksum and PDF stages do not increment database work ticks.
+PostgreSQL reports completed queries separately from SQLite execution callbacks.
+Checksum scans also report observed metadata rows.
+PDF stages do not increment database work ticks.
 A blocked storage read can delay both a query and its next execution callback.
 
 Older workers expose their existing heartbeat and saved batch checkpoint only.
@@ -191,14 +193,8 @@ The observer does not change the catalog, skip validation, or call an embedding 
 
 ## Choose metadata storage
 
-Row count alone does not determine when a catalog needs a server database.
-SQLite fits an embedded reader and portable catalog snapshots.
-This application can load a bounded catalog image for serving.
-The offline validator still scans its on-disk candidate and baseline.
-Network-backed files can make those scans expensive.
-
-For a shared deployment, assess PostgreSQL for metadata and concurrent updates.
-Retain the vector service for embeddings and object storage for saved documents.
-A migration needs an import check, source-count reconciliation, retrieval comparisons, and a rollback path.
-Keep the current store until those checks pass.
-Changing metadata storage does not inherently require changing the embedding model.
+SQLite remains available for local embedded catalogs.
+Shared deployments can use [PostgreSQL pools](postgres.md) with native full-text indexes and server-side candidate copies.
+Metadata migration preserves document fingerprints and vector identities.
+It does not change the embedding model or require a corpus rebuild.
+Small session, usage, and download checkpoint stores retain their existing SQLite contracts.

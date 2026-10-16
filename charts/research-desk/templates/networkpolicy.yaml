@@ -20,6 +20,14 @@ spec:
       ports:
         - port: 8080
   egress:
+    {{- if .Values.postgres.enabled }}
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: {{ .Values.postgres.namespace | quote }}}
+          podSelector:
+            matchLabels: {cnpg.io/poolerName: {{ .Values.postgres.poolerName | quote }}}
+      ports: [{port: 5432}]
+    {{- end }}
     - to:
         - namespaceSelector:
             matchLabels:

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -8,6 +9,8 @@ import (
 )
 
 type indexValidationProgress struct {
+	ChecksumRecords     uint64 `json:"checksum_records,omitempty"`
+	WorkUnit            string `json:"work_unit,omitempty"`
 	RunID               string `json:"run_id"`
 	Stage               string `json:"stage"`
 	State               string `json:"state"`
@@ -42,6 +45,12 @@ func (m *indexManager) observeValidationInterval(id string, d *database, interva
 	}
 	now := indexTime()
 	p := &validationObserver{db: d, path: m.runPath(id, "validation-progress.json"), done: make(chan struct{}), exited: make(chan struct{}), progress: indexValidationProgress{RunID: id, State: "running", Stage: "starting", Updated: now, StageStarted: now, LastAdvanced: now, InstructionsPerTick: 10000}}
+	if d.pg != nil {
+		p.progress.WorkUnit = "completed-postgres-query"
+		p.progress.InstructionsPerTick = 0
+	} else {
+		p.progress.WorkUnit = "sqlite-execution-callback"
+	}
 	if err := writeIndexJSON(p.path, p.progress); err != nil {
 		d.stopSQLProgress()
 		return nil, err
@@ -62,6 +71,11 @@ func (m *indexManager) observeValidationInterval(id string, d *database, interva
 	return p, nil
 }
 func (p *validationObserver) sampleLocked() {
+	rows := p.db.checksumRows()
+	if rows > p.progress.ChecksumRecords {
+		p.progress.ChecksumRecords = rows
+		p.progress.LastAdvanced = indexTime()
+	}
 	ticks := p.db.sqlProgressTicks()
 	if ticks > p.progress.WorkTicks {
 		p.progress.WorkTicks = ticks
@@ -107,11 +121,11 @@ func (p *validationObserver) finish(passed bool) {
 }
 func (m *indexManager) validationProgress(id string) *indexValidationProgress {
 	var p indexValidationProgress
-	if readIndexJSON(filepath.Join(m.root, "runs", id, "validation-progress.json"), &p) != nil || p.RunID != id || p.InstructionsPerTick != 10000 {
+	if readIndexJSON(filepath.Join(m.root, "runs", id, "validation-progress.json"), &p) != nil || p.RunID != id || (p.InstructionsPerTick != 10000 && !(p.InstructionsPerTick == 0 && p.WorkUnit == "completed-postgres-query")) {
 		return nil
 	}
 	switch p.Stage {
-	case "starting", "sqlite-integrity", "full-text-integrity", "source-counts", "identifier-queries", "catalog-diff", "keyword-query", "duplicate-identifiers", "catalog-checksum", "saved-pdf-samples":
+	case "postgres-constraints", "postgres-indexes", "starting", "sqlite-integrity", "full-text-integrity", "source-counts", "identifier-queries", "catalog-diff", "keyword-query", "duplicate-identifiers", "catalog-checksum", "saved-pdf-samples":
 	default:
 		return nil
 	}
@@ -121,4 +135,13 @@ func (m *indexManager) validationProgress(id string) *indexValidationProgress {
 		return nil
 	}
 	return &p
+}
+
+func (p *validationObserver) catalogSHA(path string) (string, error) {
+	if p.db.pg != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		return p.db.pg.identity(ctx)
+	}
+	return indexFileSHA(path)
 }

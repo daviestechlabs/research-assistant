@@ -124,7 +124,7 @@
                       },
                       "memoryMiB": {
                         "type": "integer",
-                        "minimum": 64,
+                        "minimum": 0,
                         "maximum": 14336,
                         "default": 512
                       }
@@ -914,6 +914,90 @@
                         }
                       }
                     }
+                  },
+                  "postgres": {
+                    "type": "object",
+                    "properties": {
+                      "secretName": {
+                        "type": "string",
+                        "maxLength": 63,
+                        "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                      },
+                      "caSecretName": {
+                        "type": "string",
+                        "maxLength": 63,
+                        "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                      },
+                      "namespace": {
+                        "type": "string",
+                        "maxLength": 63,
+                        "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                      },
+                      "poolerName": {
+                        "type": "string",
+                        "maxLength": 63,
+                        "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "workerEnabled": {
+                        "type": "boolean"
+                      },
+                      "host": {
+                        "type": "string",
+                        "maxLength": 253,
+                        "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+                      },
+                      "database": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                      },
+                      "usernameKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 253,
+                        "pattern": "^[a-zA-Z0-9._-]+$"
+                      },
+                      "passwordKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 253,
+                        "pattern": "^[a-zA-Z0-9._-]+$"
+                      },
+                      "caKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 253,
+                        "pattern": "^[a-zA-Z0-9._-]+$"
+                      }
+                    },
+                    "required": [
+                      "enabled",
+                      "workerEnabled",
+                      "host",
+                      "database",
+                      "secretName",
+                      "usernameKey",
+                      "passwordKey",
+                      "caSecretName",
+                      "caKey",
+                      "namespace",
+                      "poolerName"
+                    ],
+                    "default": {
+                      "enabled": false,
+                      "workerEnabled": false,
+                      "host": "",
+                      "database": "research",
+                      "secretName": "",
+                      "usernameKey": "username",
+                      "passwordKey": "password",
+                      "caSecretName": "",
+                      "caKey": "ca.crt",
+                      "namespace": "",
+                      "poolerName": ""
+                    }
                   }
                 },
                 "required": [
@@ -921,6 +1005,18 @@
                   "storage"
                 ],
                 "x-kubernetes-validations": [
+                  {
+                    "rule": "!has(self.postgres) || !self.postgres.enabled || (size(self.postgres.host)>0 && size(self.postgres.secretName)>0 && size(self.postgres.caSecretName)>0 && size(self.postgres.namespace)>0 && size(self.postgres.poolerName)>0)",
+                    "message": "PostgreSQL requires a fixed TLS pool and external credential and CA references."
+                  },
+                  {
+                    "rule": "!has(self.postgres) || !self.postgres.workerEnabled || (self.postgres.enabled && has(self.indexing) && self.indexing.enabled)",
+                    "message": "PostgreSQL worker support requires PostgreSQL and indexing."
+                  },
+                  {
+                    "rule": "self.storage.memoryMiB>0 || (has(self.postgres) && self.postgres.enabled)",
+                    "message": "A zero metadata cache requires PostgreSQL."
+                  },
                   {
                     "rule": "!has(self.indexing) || !has(self.indexing.retention) || !self.indexing.retention.enabled || self.indexing.enabled",
                     "message": "Catalog retention requires indexing."

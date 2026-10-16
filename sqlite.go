@@ -62,6 +62,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -69,6 +70,8 @@ import (
 
 // One connection, one owner at a time. No Go pointer crosses the SQLite API.
 type database struct {
+	pg         *postgresCatalog
+	pgProgress bool
 	mu         sync.Mutex
 	progressMu sync.Mutex
 	progress   *C.research_sql_progress
@@ -225,6 +228,14 @@ func copyDatabase(ctx context.Context, target, source *database) error {
 }
 
 func openDatabase(path string, create bool) (*database, error) {
+	if postgresEnabled() {
+		if id, ok := postgresPathID(path); ok {
+			return openPostgresCatalog(path, id)
+		}
+	}
+	return openSQLiteDatabase(path, create)
+}
+func openSQLiteDatabase(path string, create bool) (*database, error) {
 	if path == "" {
 		return nil, errors.New("an explicit database path is required")
 	}
@@ -250,7 +261,30 @@ func openDatabase(path string, create bool) (*database, error) {
 	return d, nil
 }
 
+func openSQLiteSource(path string) (*database, error) {
+	name := C.CString(path)
+	defer C.free(unsafe.Pointer(name))
+	d := &database{path: path}
+	if C.sqlite3_open_v2(name, &d.p, C.SQLITE_OPEN_READONLY|C.SQLITE_OPEN_FULLMUTEX, nil) != C.SQLITE_OK {
+		e := d.err()
+		d.close()
+		return nil, e
+	}
+	C.sqlite3_busy_timeout(d.p, 5000)
+	return d, nil
+}
+
 func (d *database) close() {
+	if d != nil && d.pg != nil {
+		d.stopSQLProgress()
+		d.progressMu.Lock()
+		if d.pg.tx != nil {
+			_ = d.pg.tx.Rollback(context.Background())
+		}
+		d.pg.pool.Close()
+		d.pg = nil
+		d.progressMu.Unlock()
+	}
 	if d != nil && d.p != nil {
 		d.stopSQLProgress()
 		C.sqlite3_close(d.p)
@@ -267,6 +301,14 @@ func (d *database) close() {
 func (d *database) startSQLProgress() error {
 	d.progressMu.Lock()
 	defer d.progressMu.Unlock()
+	if d.pg != nil {
+		if d.pgProgress {
+			return errors.New("database progress observer is unavailable")
+		}
+		d.pgProgress = true
+		d.pg.ticks.Store(0)
+		return nil
+	}
 	if d.p == nil || d.progress != nil {
 		return errors.New("database progress observer is unavailable")
 	}
@@ -279,14 +321,26 @@ func (d *database) startSQLProgress() error {
 func (d *database) sqlProgressTicks() uint64 {
 	d.progressMu.Lock()
 	defer d.progressMu.Unlock()
+	if d.pg != nil {
+		return d.pg.ticks.Load()
+	}
 	if d.progress == nil {
 		return 0
 	}
 	return uint64(C.research_sql_ticks(d.progress))
 }
+func (d *database) checksumRows() uint64 {
+	d.progressMu.Lock()
+	defer d.progressMu.Unlock()
+	if d.pg != nil {
+		return d.pg.scanRows.Load()
+	}
+	return 0
+}
 func (d *database) stopSQLProgress() {
 	d.progressMu.Lock()
 	defer d.progressMu.Unlock()
+	d.pgProgress = false
 	if d.progress != nil {
 		C.research_sql_unwatch(d.p, d.progress)
 		d.progress = nil
@@ -294,6 +348,10 @@ func (d *database) stopSQLProgress() {
 }
 func (d *database) err() error { return fmt.Errorf("sqlite: %s", C.GoString(C.sqlite3_errmsg(d.p))) }
 func (d *database) exec(sql string) error {
+	if d.pg != nil && (postgresCatalogSQL(sql) || d.pg.tx != nil || sql == "BEGIN IMMEDIATE" || sql == "BEGIN" || sql == "COMMIT" || sql == "ROLLBACK" || strings.HasPrefix(sql, "DETACH DATABASE")) {
+		_, e := d.pg.exec(sql)
+		return e
+	}
 	s := C.CString(sql)
 	defer C.free(unsafe.Pointer(s))
 	if C.sqlite3_exec(d.p, s, nil, nil, nil) != C.SQLITE_OK {
@@ -322,6 +380,9 @@ func (d *database) prepare(sql string, args ...string) (*C.sqlite3_stmt, error) 
 }
 
 func (d *database) run(sql string, args ...string) (int, error) {
+	if d.pg != nil && (postgresCatalogSQL(sql) || strings.HasPrefix(sql, "ATTACH DATABASE")) {
+		return d.pg.exec(sql, args...)
+	}
 	s, err := d.prepare(sql, args...)
 	if err != nil {
 		return 0, err
@@ -334,6 +395,9 @@ func (d *database) run(sql string, args ...string) (int, error) {
 }
 
 func (d *database) rows(sql string, args ...string) ([][]string, error) {
+	if d.pg != nil && postgresCatalogSQL(sql) {
+		return d.pg.rows(sql, args...)
+	}
 	s, err := d.prepare(sql, args...)
 	if err != nil {
 		return nil, err

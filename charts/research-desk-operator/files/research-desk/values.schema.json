@@ -63,7 +63,7 @@
         },
         "memoryMiB": {
           "type": "integer",
-          "minimum": 64,
+          "minimum": 0,
           "maximum": 14336
         }
       },
@@ -773,6 +773,78 @@
           ]
         }
       }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "secretName": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "caSecretName": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "namespace": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "poolerName": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "workerEnabled": {
+          "type": "boolean"
+        },
+        "host": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+        },
+        "database": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,62}$"
+        },
+        "usernameKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-zA-Z0-9._-]+$"
+        },
+        "passwordKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-zA-Z0-9._-]+$"
+        },
+        "caKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-zA-Z0-9._-]+$"
+        }
+      },
+      "required": [
+        "enabled",
+        "workerEnabled",
+        "host",
+        "database",
+        "secretName",
+        "usernameKey",
+        "passwordKey",
+        "caSecretName",
+        "caKey",
+        "namespace",
+        "poolerName"
+      ]
     }
   },
   "required": [
@@ -902,6 +974,115 @@
             "required": [
               "enabled"
             ],
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "postgres"
+        ],
+        "properties": {
+          "postgres": {
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "postgres": {
+            "properties": {
+              "host": {
+                "minLength": 1
+              },
+              "secretName": {
+                "minLength": 1
+              },
+              "caSecretName": {
+                "minLength": 1
+              },
+              "namespace": {
+                "minLength": 1
+              },
+              "poolerName": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "postgres"
+        ],
+        "properties": {
+          "postgres": {
+            "required": [
+              "workerEnabled"
+            ],
+            "properties": {
+              "workerEnabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "indexing"
+        ],
+        "properties": {
+          "postgres": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          },
+          "indexing": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "storage": {
+            "properties": {
+              "memoryMiB": {
+                "const": 0
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "postgres"
+        ],
+        "properties": {
+          "postgres": {
             "properties": {
               "enabled": {
                 "const": true

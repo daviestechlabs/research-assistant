@@ -66,6 +66,12 @@ func run(args []string) error {
 	if command == "arxiv-sync" {
 		return runArxivSync(args[1:])
 	}
+	if command == "migrate-postgres" {
+		if len(args) != 1 {
+			return errors.New("migrate-postgres accepts only its configured pool and generation receipts")
+		}
+		return migratePostgresCLI()
+	}
 	if command == "index-worker" {
 		return indexingWorker()
 	}
@@ -466,7 +472,7 @@ func run(args []string) error {
 		}
 		return printJSON(map[string]any{"database_integrity": "ok", "fts_content_integrity": "ok"})
 	case "serve":
-		if *memoryMiB > 0 {
+		if *memoryMiB > 0 && d.pg == nil {
 			cache, err := openDatabase(":memory:", true)
 			if err != nil {
 				return err

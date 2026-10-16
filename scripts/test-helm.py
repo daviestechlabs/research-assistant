@@ -128,3 +128,31 @@ try: jsonschema.validate(bad,schema)
 except jsonschema.ValidationError: pass
 else: raise AssertionError('Retention without indexing accepted')
 print('One-backup retention policy, prerequisite, and unchanged worker template checks pass.')
+
+pg = copy.deepcopy(automatic)
+pg['postgres'] = {'enabled':True,'workerEnabled':False,'host':'pool.database.svc.cluster.local','database':'research','secretName':'catalog-auth','usernameKey':'username','passwordKey':'password','caSecretName':'catalog-ca','caKey':'ca.crt','namespace':'database','poolerName':'catalog-pool'}
+pg['storage']['memoryMiB']=0
+jsonschema.validate(pg,schema)
+def pg_render(v):
+    output=subprocess.check_output([args.helm,'template','research-desk',str(root/'charts/research-desk'),'-n','research','-f','-'],input=json.dumps(v),text=True)
+    return [r for r in yaml.safe_load_all(output)if r]
+objects=pg_render(pg)
+a=next(r for r in objects if r['kind']=='Deployment' and not r['metadata']['name'].endswith('-indexer'))
+w=next(r for r in objects if r['kind']=='Deployment' and r['metadata']['name'].endswith('-indexer'))
+env={e['name']:e.get('value')for e in a['spec']['template']['spec']['containers'][0]['env']}
+assert env['RESEARCH_POSTGRES_HOST']==pg['postgres']['host'] and env['RESEARCH_POSTGRES_WRITER']=='false'
+assert not any(e['name'].startswith('RESEARCH_POSTGRES_')for e in w['spec']['template']['spec']['containers'][0]['env'])
+assert w['spec']['template']==worker['spec']['template'], 'App-only pool adoption changed the pinned worker'
+pg['postgres']['workerEnabled']=True
+objects=pg_render(pg)
+w=next(r for r in objects if r['kind']=='Deployment' and r['metadata']['name'].endswith('-indexer'))
+env={e['name']:e.get('value')for e in w['spec']['template']['spec']['containers'][0]['env']}
+assert env['RESEARCH_POSTGRES_WRITER']=='true' and 'RESEARCH_MODEL_KEY' not in env
+policy=next(r for r in objects if r['kind']=='NetworkPolicy' and r['metadata']['name'].endswith('-indexer'))
+assert any(p['port']==5432 for e in policy['spec']['egress']for p in e.get('ports',[]))
+for key,value in [('enabled',False),('secretName',''),('caSecretName',''),('host','postgres://user:password@host')]:
+    bad=copy.deepcopy(pg);bad['postgres'][key]=value
+    try:jsonschema.validate(bad,schema)
+    except jsonschema.ValidationError:continue
+    raise AssertionError('Unsafe PostgreSQL configuration accepted: '+key)
+print('Verified-TLS PostgreSQL references, staged worker adoption, network selection, and rejected credentials-in-URL checks pass.')

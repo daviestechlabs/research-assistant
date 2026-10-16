@@ -63,6 +63,12 @@ The default network rules permit the supplied Envoy Gateway and model service la
 Adapt its namespaces and labels to your cluster before activation.
 Gateway mode validates its HTTPS origin and OIDC endpoints.
 
+## PostgreSQL catalogs
+
+The operator references an existing PostgreSQL pool, database, credentials, and certificate authority.
+It does not install CloudNativePG or own database storage.
+See [PostgreSQL migration](../docs/postgres.md) and the generic [CNPG sample](samples/postgres.yaml).
+
 ## Reconciliation and removal
 
 The operator repairs missing chart resources and applies supported spec changes.

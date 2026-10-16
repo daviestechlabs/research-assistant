@@ -46,6 +46,9 @@ spec:
             - configMapRef:
                 name: {{ include "desk.configName" . }}
           env:
+            {{- if .Values.postgres.enabled }}
+            {{- include "desk.postgresEnv" (dict "root" . "writer" false) | nindent 12 }}
+            {{- end }}
             {{- if .Values.indexing.retention.enabled }}
             - name: RESEARCH_INDEX_RETENTION
               value: "true"
@@ -94,6 +97,9 @@ spec:
             capabilities:
               drop: [ALL]
           volumeMounts:
+            {{- if .Values.postgres.enabled }}
+            {{- include "desk.postgresMounts" . | nindent 12 }}
+            {{- end }}
             - name: catalog
               mountPath: /catalog
             - name: tmp
@@ -120,6 +126,9 @@ spec:
             periodSeconds: 30
             failureThreshold: 3
       volumes:
+        {{- if .Values.postgres.enabled }}
+        {{- include "desk.postgresVolumes" . | nindent 8 }}
+        {{- end }}
         - name: catalog
           persistentVolumeClaim:
             claimName: {{ .Values.storage.existingClaim }}

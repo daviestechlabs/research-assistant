@@ -176,6 +176,9 @@ func (d *database) verify() error {
 	return d.verifyObserved(nil)
 }
 func (d *database) verifyObserved(stage func(string)) error {
+	if d.pg != nil {
+		return d.pg.verify(stage)
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if stage != nil {

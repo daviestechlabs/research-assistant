@@ -45,6 +45,9 @@ spec:
           args: [index-worker]
           # No chat key, OIDC configuration, or Kubernetes token reaches this worker.
           env:
+            {{- if and .Values.postgres.enabled .Values.postgres.workerEnabled }}
+            {{- include "desk.postgresEnv" (dict "root" . "writer" true) | nindent 12 }}
+            {{- end }}
             {{- if and .Values.arxivSync.enabled .Values.indexing.arxivUpdatesEnabled }}
             - name: RESEARCH_ARXIV_SYNC_ROOT
               value: {{ printf "/catalog/%s" .Values.arxivSync.directory | quote }}
@@ -102,6 +105,9 @@ spec:
             capabilities:
               drop: [ALL]
           volumeMounts:
+            {{- if and .Values.postgres.enabled .Values.postgres.workerEnabled }}
+            {{- include "desk.postgresMounts" . | nindent 12 }}
+            {{- end }}
             - name: catalog
               mountPath: /catalog
             - name: index-config
@@ -120,6 +126,9 @@ spec:
               readOnly: true
             {{- end }}
       volumes:
+        {{- if and .Values.postgres.enabled .Values.postgres.workerEnabled }}
+        {{- include "desk.postgresVolumes" . | nindent 8 }}
+        {{- end }}
         {{- if .Values.indexing.trustConfigMapName }}
         - name: index-trust
           configMap:
@@ -151,6 +160,14 @@ spec:
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:
+    {{- if and .Values.postgres.enabled .Values.postgres.workerEnabled }}
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: {{ .Values.postgres.namespace | quote }}}
+          podSelector:
+            matchLabels: {cnpg.io/poolerName: {{ .Values.postgres.poolerName | quote }}}
+      ports: [{port: 5432}]
+    {{- end }}
     - to:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: kube-system}

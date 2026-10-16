@@ -287,7 +287,13 @@ func (m *indexManager) retentionStep(ctx context.Context) error {
 			}
 		}
 		if _, e = os.Stat(g.Catalog); e == nil {
-			sha, err := indexFileSHA(g.Catalog)
+			var sha string
+			var err error
+			if postgresEnabled() {
+				sha, err = postgresPruningIdentity(ctx, g, r.Pruning)
+			} else {
+				sha, err = indexFileSHA(g.Catalog)
+			}
 			if err != nil || sha != g.SHA {
 				return fail()
 			}
@@ -319,6 +325,11 @@ func (m *indexManager) retentionStep(ctx context.Context) error {
 						return fail()
 					}
 				}
+			}
+		}
+		if postgresEnabled() {
+			if e = postgresRetireGeneration(ctx, g); e != nil {
+				return fail()
 			}
 		}
 		for _, file := range files {

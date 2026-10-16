@@ -367,6 +367,7 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 		if e != nil {
 			return e
 		}
+		defer d.close()
 		progress, e := m.observeValidation(run.ID, d)
 		if e != nil {
 			d.close()
@@ -473,12 +474,18 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 		}
 		s.Validation = map[string]any{"sqlite_integrity": true, "fts_integrity": true, "counts_reconciled": true, "all_snapshot_rows_read": true, "source_counts": counts, "id_queries": true, "keyword_query": true, "duplicate_dois": doi[0][0], "saved_link_scope": "configured samples only; metadata does not prove every saved file exists", "chat_model_calls": 0, "added_records": changes[0][0], "removed_records": changes[0][1], "changed_records": changes[0][2]}
 		progress.stage("catalog-checksum")
-		d.close()
-		sha, e := indexFileSHA(path)
+		sha, e := progress.catalogSHA(path)
 		if e != nil {
 			return e
 		}
 		s.Candidate = &indexGeneration{ID: run.ID, Catalog: path, SHA: sha, Parent: run.Base.ID, ParentSHA: s.BaselineSHA}
+		if postgresEnabled() {
+			s.Validation["metadata_backend"] = "postgres"
+			s.Validation["postgres_constraints"] = true
+			s.Validation["full_text_indexes_valid"] = true
+			delete(s.Validation, "sqlite_integrity")
+			delete(s.Validation, "fts_integrity")
+		}
 		progress.stage("saved-pdf-samples")
 		// Saved-link checks read only the deployment's explicitly configured samples.
 		if len(m.config.LinkSamples) > 0 {
@@ -497,6 +504,7 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 			s.Validation["saved_links_verified"] = len(m.config.LinkSamples)
 		}
 		progress.finish(true)
+		d.close()
 		if run.Meaning {
 			s.Phase = "meaning"
 		} else {
@@ -533,6 +541,9 @@ func (m *indexManager) checkpoint(d *database, s *indexState) error {
 	return m.saveState(s)
 }
 func (m *indexManager) prepareCandidate(ctx context.Context, run indexRun, s *indexState, path string, collections []indexCollection) error {
+	if postgresEnabled() {
+		return m.preparePostgresCandidate(ctx, run, s, path, collections)
+	}
 	if _, e := os.Stat(path); e == nil {
 		return nil
 	} else if !os.IsNotExist(e) {

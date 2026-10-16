@@ -176,6 +176,9 @@ func (d *database) search(q SearchRequest) (SearchResponse, error) {
 	if q.Source == "dnd" {
 		return d.searchBooks(q)
 	}
+	if d.pg != nil {
+		return d.pg.search(q)
+	}
 	start := time.Now()
 	result := SearchResponse{Method: "bm25", Documents: []Document{}}
 	if err := q.validate(); err != nil {
@@ -349,5 +352,10 @@ func (d *database) stats() (any, error) {
 		n, _ = strconv.Atoi(row[3])
 		units += n
 	}
-	return map[string]any{"sources": sources, "usage_today": usage, "model_calls_today": calls, "reserved_units_today": units, "search_pdf_reads": 0, "schema": 2}, nil
+	return map[string]any{"metadata_backend": func() string {
+		if d.pg != nil {
+			return "postgres"
+		}
+		return "sqlite"
+	}(), "sources": sources, "usage_today": usage, "model_calls_today": calls, "reserved_units_today": units, "search_pdf_reads": 0, "schema": 2}, nil
 }

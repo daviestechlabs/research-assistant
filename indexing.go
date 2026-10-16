@@ -555,6 +555,13 @@ func (m *indexManager) activate(id string, rollback bool) error {
 		return errors.New("this generation is already active")
 	}
 	original := os.Getenv("RESEARCH_INDEX_ORIGINAL_CATALOG")
+	if postgresEnabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Hour)
+		defer cancel()
+		if e = postgresPrepareActivation(ctx, candidate); e != nil {
+			return e
+		}
+	}
 	if e = validGeneration(m.root, candidate, original); e != nil {
 		return e
 	}
@@ -650,7 +657,12 @@ func (m *indexManager) routes(mux *http.ServeMux) {
 		if readIndexJSON(filepath.Join(m.root, "active.json"), &a) != nil {
 			a.Current = m.base
 		}
-		writeJSON(w, 200, map[string]any{"collections": collections, "runs": states, "active": a.Current.ID, "rollback_available": a.Previous != nil, "meaning_available": m.config.ModelSHA != "", "worker_heartbeat": indexHeartbeat(m.root), "arxiv_sync": syncPublicStatus(), "arxiv_updates_enabled": os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") == "true", "arxiv_auto_merge": m.autoMergePublicStatus(), "retention": m.retentionPublicStatus()})
+		writeJSON(w, 200, map[string]any{"collections": collections, "runs": states, "active": a.Current.ID, "rollback_available": a.Previous != nil, "meaning_available": m.config.ModelSHA != "", "worker_heartbeat": indexHeartbeat(m.root), "arxiv_sync": syncPublicStatus(), "arxiv_updates_enabled": os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") == "true", "arxiv_auto_merge": m.autoMergePublicStatus(), "retention": m.retentionPublicStatus(), "metadata_backend": func() string {
+			if postgresEnabled() {
+				return "postgres"
+			}
+			return "sqlite"
+		}()})
 	}))
 	mux.HandleFunc("POST /api/library/indexing", wrap(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -692,6 +704,21 @@ func indexHeartbeat(root string) string {
 	return v["updated"]
 }
 func indexFileSHA(path string) (string, error) {
+	if postgresEnabled() {
+		if id, ok := postgresPathID(path); ok {
+			d, e := openPostgresCatalog(path, id)
+			if e != nil {
+				return "", e
+			}
+			defer d.close()
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+			defer cancel()
+			return d.pg.identity(ctx)
+		}
+	}
+	return indexRawFileSHA(path)
+}
+func indexRawFileSHA(path string) (string, error) {
 	f, e := os.Open(path)
 	if e != nil {
 		return "", e

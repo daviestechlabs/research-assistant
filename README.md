@@ -9,7 +9,7 @@ Research Desk Operator installs the desk through a Kubernetes `ResearchDesk` res
 
 ## Features
 
-- Search abstracts with SQLite FTS5 or look up exact identifiers.
+- Search abstracts with PostgreSQL full-text search or SQLite FTS5.
 - Empty searches remove filler words, normalize I/O, and retry with two topic terms.
 - Optional reranking, question expansion, and semantic retrieval.
 - Saved sessions, research notes, progress, cancellation, and durable jobs.
@@ -53,6 +53,7 @@ Broader results show their search terms and retain all filters.
 ```
 
 See [configuration](docs/configuration.md) for models, storage, authentication, and branding.
+See [PostgreSQL migration](docs/postgres.md) for pooled catalogs and CloudNativePG.
 See [Kubernetes installation](operator/README.md) for Research Desk Operator.
 
 ## Build an image

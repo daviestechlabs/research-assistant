@@ -18,6 +18,7 @@
       $('index-worker-status').textContent = live ? 'Offline worker is connected. Indexing makes no chat model calls.' : 'Worker is unavailable or has not checked in. Requests stay saved.';
       $('index-rollback').disabled = !snapshot.rollback_available || busy;
       $('index-active').textContent = snapshot.active === 'original' ? 'Original catalog' : 'Generation ' + snapshot.active.slice(0, 8);
+      if (snapshot.metadata_backend === 'postgres') $('index-active').textContent += ' · PostgreSQL pool';
       const retention = snapshot.retention;
       $('index-retention-status').textContent = retention?.enabled ? 'Storage policy: live catalog + one rollback catalog. Unfinished candidates stay protected.' + (retention.pruned_generations ? ' ' + number(retention.pruned_generations) + ' older catalogs retired.' : '') + (retention.error ? ' ' + retention.error : '') : 'Automatic catalog cleanup is disabled.';
       if (!$('index-collections').children.length) {
@@ -45,8 +46,9 @@
           const progress = run.validation_progress;
           if (progress) {
             const advanced = Date.parse(progress.last_advanced), seconds = Number.isFinite(advanced) ? Math.max(0, Math.floor((Date.now() - advanced) / 1000)) : null;
-            card.append(node('p', 'Validation: ' + progress.stage.replaceAll('-', ' ') + ' · ' + number(progress.work_ticks) + ' database work ticks · ' + (seconds === null ? 'advance time unavailable' : 'last advance ' + seconds + ' seconds ago'), 'index-meta'));
-            card.append(node('p', 'Work ticks count database execution callbacks. They are not rows or a completion percentage.', 'index-meta'));
+            card.append(node('p', 'Validation: ' + progress.stage.replaceAll('-', ' ') + ' · ' + number(progress.work_ticks) + (progress.work_unit === 'completed-postgres-query' ? ' completed database queries · ' : ' database work ticks · ') + (seconds === null ? 'advance time unavailable' : 'last advance ' + seconds + ' seconds ago'), 'index-meta'));
+            if (progress.checksum_records) card.append(node('p', number(progress.checksum_records) + ' metadata rows read for the content checksum.', 'index-meta'));
+            card.append(node('p', progress.work_unit === 'completed-postgres-query' ? 'The counter records completed SQL operations. A running query may keep this number unchanged.' : 'Work ticks count database execution callbacks. They are not rows or a completion percentage.', 'index-meta'));
           } else {
             card.append(node('p', 'Detailed progress is unavailable from this worker version. Its heartbeat confirms availability, not scan advancement.', 'index-meta'));
           }
@@ -62,7 +64,7 @@
         card.append(node('p', number(run.records_read) + ' rows processed · ' + number(run.duplicate_records) + ' identical duplicates · ' + number(run.missing_summaries) + ' missing summaries · ' + number(run.vectors) + ' vectors indexed · ' + number(run.reused_vectors) + ' reused · ' + number(run.new_embeddings) + ' new embeddings', 'index-meta'));
         if (run.validation) {
           card.append(node('p', number(run.validation.added_records) + ' records added · ' + number(run.validation.removed_records) + ' removed · ' + number(run.validation.changed_records) + ' changed'));
-          card.append(node('p', 'Integrity, keyword search, and snapshot counts passed. ' + number(run.validation.saved_links_verified) + ' configured saved-link samples verified. ' + (run.validation.verified_vectors ? number(run.validation.verified_vectors) + ' vectors independently counted.' : 'This candidate uses keyword search.')));
+          card.append(node('p', 'Integrity, keyword search, and snapshot counts passed. ' + number(run.validation.saved_links_verified) + ' configured saved-link samples verified. ' + (run.validation.verified_vectors ? number(run.validation.verified_vectors) + ' vectors independently counted.' : 'No independently verified vector count is recorded yet.')));
           card.append(node('p', run.validation.saved_link_scope, 'index-meta'));
         }
         if (run.error) card.append(node('p', run.error, 'index-error'));

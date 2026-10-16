@@ -3,6 +3,12 @@
 The application reads operator-supplied environment variables.
 Browser requests cannot choose model endpoints, storage addresses, or object keys.
 
+## Catalog storage
+
+SQLite remains the default for a local desk.
+Shared catalogs can use PostgreSQL through a transaction pooler.
+See [PostgreSQL migration](postgres.md) for TLS, credential references, and staged adoption.
+
 ## Local inference
 
 Use a dedicated LiteLLM virtual key for the research desk.

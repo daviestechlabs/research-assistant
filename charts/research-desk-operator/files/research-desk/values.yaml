@@ -139,5 +139,18 @@
         "memory": "512Mi"
       }
     }
+  },
+  "postgres": {
+    "enabled": false,
+    "workerEnabled": false,
+    "host": "",
+    "database": "research",
+    "secretName": "",
+    "usernameKey": "username",
+    "passwordKey": "password",
+    "caSecretName": "",
+    "caKey": "ca.crt",
+    "namespace": "",
+    "poolerName": ""
   }
 }

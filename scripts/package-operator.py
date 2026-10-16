@@ -40,6 +40,10 @@ def generated_crd():
         storage["properties"][key]["default"] = values["storage"][key]
     schema["required"] = ["auth", "storage"]
     schema["x-kubernetes-validations"] = [
+        {"rule": '!has(self.postgres) || !self.postgres.enabled || (size(self.postgres.host)>0 && size(self.postgres.secretName)>0 && size(self.postgres.caSecretName)>0 && size(self.postgres.namespace)>0 && size(self.postgres.poolerName)>0)', "message": "PostgreSQL requires a fixed TLS pool and external credential and CA references."},
+        {"rule": '!has(self.postgres) || !self.postgres.workerEnabled || (self.postgres.enabled && has(self.indexing) && self.indexing.enabled)', "message": "PostgreSQL worker support requires PostgreSQL and indexing."},
+        {"rule": 'self.storage.memoryMiB>0 || (has(self.postgres) && self.postgres.enabled)', "message": "A zero metadata cache requires PostgreSQL."},
+
         {"rule": '!has(self.indexing) || !has(self.indexing.retention) || !self.indexing.retention.enabled || self.indexing.enabled', "message": "Catalog retention requires indexing."},
         {"rule": '!has(self.indexing) || !has(self.indexing.arxivAutoMerge) || !self.indexing.arxivAutoMerge.enabled || (self.indexing.enabled && self.indexing.arxivUpdatesEnabled && has(self.arxivSync) && self.arxivSync.enabled)', "message": "Automatic arXiv merging requires indexing, update support, and harvesting."},
         {"rule": '!has(self.arxivSync) || !self.arxivSync.enabled || (size(self.arxivSync.imageDigest) == 71 && size(self.arxivSync.fromDate) == 10)', "message": "Enabled arXiv sync requires an immutable image and initial coverage date."},
