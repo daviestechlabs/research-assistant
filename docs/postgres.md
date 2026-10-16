@@ -67,6 +67,8 @@ PostgreSQL uses English text normalization and `ts_rank_cd`; rankings can differ
 Paper topics still search supplied abstracts only.
 The Books filter also searches catalog titles, authors, subjects, and descriptions.
 Natural-phrase fallback retains source, category, language, and date filters.
+It first tries the closest topic overlap, then relaxes toward a two-term minimum.
+Each relaxation stays inside the full-text index query.
 
 ## Adopt the pool in stages
 

@@ -10,7 +10,7 @@ Research Desk Operator installs the desk through a Kubernetes `ResearchDesk` res
 ## Features
 
 - Search abstracts with PostgreSQL full-text search or SQLite FTS5.
-- Empty searches remove filler words, normalize I/O, and retry with two topic terms.
+- Empty searches remove filler words, normalize I/O, and relax toward two topic terms.
 - Optional reranking, question expansion, and semantic retrieval.
 - Saved sessions, research notes, progress, cancellation, and durable jobs.
 - Learn, Compare, and Connect ideas with source citations and evidence checks.

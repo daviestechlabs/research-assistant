@@ -76,12 +76,12 @@ func (p *postgresCatalog) search(q SearchRequest) (SearchResponse, error) {
 		return out, errors.New("query needs searchable words or an identifier")
 	}
 	terms := topicTerms(q.Query)
-	search := func(normalized, broad, two bool) ([][]string, error) {
+	search := func(normalized bool, minimum int) ([][]string, error) {
 		labels := raw
 		if normalized {
 			labels = []string{}
-			for _, t := range terms {
-				label := t.label
+			for _, term := range terms {
+				label := term.label
 				if label == "I/O" {
 					label = "input output io"
 				}
@@ -91,46 +91,39 @@ func (p *postgresCatalog) search(q SearchRequest) (SearchResponse, error) {
 		if len(labels) == 0 {
 			return [][]string{}, nil
 		}
-		queries := []string{}
-		values := []string{}
-		for _, label := range labels {
+		queries, names, values := []string{}, []string{}, []string{}
+		for n, label := range labels {
+			name := fmt.Sprintf("term%d", n)
+			query := "plainto_tsquery('english',?)"
 			if label == "input output io" {
-				queries = append(queries, "(phraseto_tsquery('english','input output') || plainto_tsquery('english','io'))")
+				query = "(phraseto_tsquery('english','input output') || plainto_tsquery('english','io'))"
 			} else {
-				queries = append(queries, "plainto_tsquery('english',?)")
 				values = append(values, label)
 			}
+			queries = append(queries, query+" AS "+name)
+			names = append(names, name)
 		}
-		joiner := " && "
-		if broad || two {
-			joiner = " || "
+		expression, e := postgresTopicMatch(names, minimum)
+		if e != nil {
+			return nil, e
 		}
-		expr := "(" + strings.Join(queries, joiner) + ")"
 		vector := "d.abstract_search"
 		if q.Source == "gutenberg" {
 			vector = "d.catalog_search"
 		}
-		// Put each bound term in a CTE once; ranking and filtering reuse its query.
-		cte := "WITH terms AS (SELECT " + expr + " AS query"
-		minimum := ""
-		if two {
-			cases := []string{}
-			for i, query := range queries {
-				cte += fmt.Sprintf(",%s AS term%d", query, i)
-				if labels[i] != "input output io" {
-					values = append(values, labels[i])
-				}
-				cases = append(cases, fmt.Sprintf("CASE WHEN %s @@ t.term%d THEN 1 ELSE 0 END", vector, i))
-			}
-			minimum = " AND (" + strings.Join(cases, "+") + ")>=2"
-		}
-		cte += ") "
-		sql := cte + "SELECT " + documentColumns + ",ts_rank_cd(" + vector + ",t.query,32) FROM documents d CROSS JOIN terms t WHERE " + vector + " @@ t.query" + minimum + filter + " ORDER BY ts_rank_cd(" + vector + ",t.query,32) DESC,d.id LIMIT CAST(? AS BIGINT)"
+		// Keep the minimum inside the indexed tsquery. A CASE count over a broad
+		// OR makes PostgreSQL scan the corpus before it can reject weak matches.
+		cte := "WITH terms AS (SELECT " + strings.Join(queries, ",") + "),chosen AS (SELECT " + expression + " AS query FROM terms) "
+		sql := cte + "SELECT " + documentColumns + ",ts_rank_cd(" + vector + ",t.query,32) FROM documents d CROSS JOIN chosen t WHERE " + vector + " @@ t.query" + filter + " ORDER BY ts_rank_cd(" + vector + ",t.query,32) DESC,d.id LIMIT CAST(? AS BIGINT)"
 		values = append(values, args...)
 		values = append(values, strconv.Itoa(q.Limit))
 		return p.rows(sql, values...)
 	}
-	rows, e := search(q.Broad, q.Broad, false)
+	minimum := len(raw)
+	if q.Broad {
+		minimum = 1
+	}
+	rows, e := search(q.Broad, minimum)
 	if e != nil {
 		return out, e
 	}
@@ -138,19 +131,22 @@ func (p *postgresCatalog) search(q SearchRequest) (SearchResponse, error) {
 		out.Method += "-broad"
 	}
 	if len(rows) == 0 && !q.Broad && len(terms) > 0 {
-		rows, e = search(true, false, false)
+		rows, e = search(true, len(terms))
 		if e != nil {
 			return out, e
 		}
-		minimum := len(terms)
+		minimum = len(terms)
 		reason := "Removed filler words and normalized technical terms after no exact keyword results."
-		if len(rows) == 0 && len(terms) > 2 {
-			rows, e = search(true, false, true)
+		for _, required := range postgresFallbackMinimums(len(terms)) {
+			if len(rows) > 0 {
+				break
+			}
+			rows, e = search(true, required)
 			if e != nil {
 				return out, e
 			}
-			minimum = 2
-			reason = "No exact keyword results. Broadened to records matching at least two topic terms."
+			minimum = required
+			reason = fmt.Sprintf("No exact keyword results. Broadened to records matching at least %d topic terms.", minimum)
 		}
 		labels := []string{}
 		for _, term := range terms {
@@ -162,4 +158,63 @@ func (p *postgresCatalog) search(q SearchRequest) (SearchResponse, error) {
 	out.Documents = rowsToDocuments(rows)
 	out.ElapsedMS = time.Since(start).Milliseconds()
 	return out, nil
+}
+
+// Prefer the closest available topic match before reaching the two-term floor.
+// Bound combination expansion for long questions; the two-term expression is
+// factorized and remains quadratic even at the request's 24-term limit.
+func postgresFallbackMinimums(terms int) []int {
+	out := []int{}
+	for n := terms - 1; n >= 2; n-- {
+		if n == 2 || postgresCombinations(terms, n) <= 128 {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+func postgresCombinations(n, k int) int {
+	if k < 0 || k > n {
+		return 0
+	}
+	if k > n-k {
+		k = n - k
+	}
+	x := 1
+	for i := 1; i <= k; i++ {
+		x = x * (n - k + i) / i
+	}
+	return x
+}
+func postgresTopicMatch(names []string, minimum int) (string, error) {
+	if len(names) < 1 || len(names) > 24 || minimum < 1 || minimum > len(names) {
+		return "", errors.New("invalid PostgreSQL topic threshold")
+	}
+	if minimum == 1 {
+		return "(" + strings.Join(names, " || ") + ")", nil
+	}
+	if minimum == len(names) {
+		return "(" + strings.Join(names, " && ") + ")", nil
+	}
+	parts := []string{}
+	if minimum == 2 {
+		for n := 0; n < len(names)-1; n++ {
+			parts = append(parts, "("+names[n]+" && ("+strings.Join(names[n+1:], " || ")+"))")
+		}
+	} else {
+		if postgresCombinations(len(names), minimum) > 128 {
+			return "", errors.New("PostgreSQL topic threshold exceeds query bounds")
+		}
+		var choose func(int, []string)
+		choose = func(start int, selected []string) {
+			if len(selected) == minimum {
+				parts = append(parts, "("+strings.Join(selected, " && ")+")")
+				return
+			}
+			for n := start; n <= len(names)-(minimum-len(selected)); n++ {
+				choose(n+1, append(selected, names[n]))
+			}
+		}
+		choose(0, nil)
+	}
+	return "(" + strings.Join(parts, " || ") + ")", nil
 }

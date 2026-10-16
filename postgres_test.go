@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -92,8 +93,16 @@ func TestPostgresIntegrationMigrationSearchCloneActivationAndRollback(t *testing
 	}
 	defer d.close()
 	r, e := d.search(SearchRequest{Query: "experimental algorithms to reduce I/O saturation", Source: "arxiv", Category: "cs.DC", From: "2026-01-01"})
-	if e != nil || len(r.Documents) != 1 || r.Adjustment == nil || r.Adjustment.MinimumMatch != 2 {
+	if e != nil || len(r.Documents) != 1 || r.Adjustment == nil || r.Adjustment.MinimumMatch != 4 {
 		t.Fatalf("native fallback: %+v %v", r, e)
+	}
+	r, e = d.search(SearchRequest{Query: "unknown algorithms saturation pulsar quantum", Source: "arxiv", Category: "cs.DC"})
+	if e != nil || len(r.Documents) != 1 || r.Adjustment == nil || r.Adjustment.MinimumMatch != 2 {
+		t.Fatal("two-term floor", r, e)
+	}
+	r, e = d.search(SearchRequest{Query: "experimental algorithms to reduce I/O saturation", Source: "arxiv", Category: "astro-ph"})
+	if e != nil || len(r.Documents) != 0 {
+		t.Fatal("relaxation escaped category", r, e)
 	}
 	r, e = d.search(SearchRequest{Query: "volcano", Source: "arxiv"})
 	if e != nil || len(r.Documents) != 0 {
@@ -429,5 +438,38 @@ func TestPostgresIntegrationFullRebuildPreservesUnselectedSources(t *testing.T) 
 	}
 	if e = m.activate(s.ID, false); e != nil {
 		t.Fatal("full rebuild activation", e)
+	}
+}
+
+func TestPostgresTopicThresholdsAreBoundedAndIndexable(t *testing.T) {
+	terms := []string{"term0", "term1", "term2", "term3", "term4"}
+	for _, minimum := range []int{1, 2, 3, 4, 5} {
+		q, e := postgresTopicMatch(terms, minimum)
+		if e != nil || !strings.Contains(q, "term0") || strings.Contains(q, "CASE") {
+			t.Fatal(minimum, q, e)
+		}
+	}
+	if q, _ := postgresTopicMatch(terms, 4); strings.Count(q, " && ") != 15 {
+		t.Fatal("four-of-five threshold", q)
+	}
+	if q, _ := postgresTopicMatch(terms, 2); !strings.Contains(q, "term0 && (term1 || term2 || term3 || term4)") {
+		t.Fatal("factorized pair threshold", q)
+	}
+	long := []string{}
+	for n := 0; n < 24; n++ {
+		long = append(long, fmt.Sprintf("term%d", n))
+	}
+	q, e := postgresTopicMatch(long, 2)
+	if e != nil || len(q) > 5000 {
+		t.Fatal("unbounded pair expansion", len(q), e)
+	}
+	if _, e = postgresTopicMatch(long, 12); e == nil {
+		t.Fatal("exponential combination expansion accepted")
+	}
+	if got := fmt.Sprint(postgresFallbackMinimums(24)); got != "[23 2]" {
+		t.Fatal(got)
+	}
+	if got := fmt.Sprint(postgresFallbackMinimums(5)); got != "[4 3 2]" {
+		t.Fatal(got)
 	}
 }
