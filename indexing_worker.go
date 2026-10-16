@@ -367,7 +367,13 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 		if e != nil {
 			return e
 		}
-		if e = d.verify(); e != nil {
+		progress, e := m.observeValidation(run.ID, d)
+		if e != nil {
+			d.close()
+			return e
+		}
+		defer progress.finish(false)
+		if e = d.verifyObserved(progress.stage); e != nil {
 			d.close()
 			return e
 		}
@@ -375,6 +381,7 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 			d.close()
 			return e
 		}
+		progress.stage("source-counts")
 		rows, e := d.rows("SELECT count(*),sum(summary_kind='missing') FROM documents")
 		if e != nil || len(rows) != 1 || rows[0][0] == "0" {
 			d.close()
@@ -404,6 +411,7 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 			d.close()
 			return errors.New("import did not consume the entire snapshot")
 		}
+		progress.stage("identifier-queries")
 		for _, c := range collections {
 			r, e := d.rows("SELECT id FROM documents WHERE source=? ORDER BY rowid LIMIT 1", c.Source)
 			if e != nil || len(r) != 1 {
@@ -420,6 +428,7 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 			d.close()
 			return e
 		}
+		progress.stage("catalog-diff")
 		changes, e := d.rows(`SELECT
    (SELECT count(*) FROM documents n LEFT JOIN baseline.documents b ON n.id=b.id WHERE b.id IS NULL),
    (SELECT count(*) FROM baseline.documents b LEFT JOIN documents n ON n.id=b.id WHERE n.id IS NULL),
@@ -432,11 +441,13 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 			d.close()
 			return e
 		}
+		progress.stage("duplicate-identifiers")
 		doi, e := d.rows("SELECT count(*) FROM (SELECT doi FROM documents WHERE doi!='' GROUP BY doi HAVING count(*)>1)")
 		if e != nil {
 			d.close()
 			return e
 		}
+		progress.stage("keyword-query")
 		keywordRows, e := d.rows("SELECT summary FROM documents WHERE summary!='' LIMIT 1")
 		if e != nil {
 			d.close()
@@ -461,12 +472,14 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 			}
 		}
 		s.Validation = map[string]any{"sqlite_integrity": true, "fts_integrity": true, "counts_reconciled": true, "all_snapshot_rows_read": true, "source_counts": counts, "id_queries": true, "keyword_query": true, "duplicate_dois": doi[0][0], "saved_link_scope": "configured samples only; metadata does not prove every saved file exists", "chat_model_calls": 0, "added_records": changes[0][0], "removed_records": changes[0][1], "changed_records": changes[0][2]}
+		progress.stage("catalog-checksum")
 		d.close()
 		sha, e := indexFileSHA(path)
 		if e != nil {
 			return e
 		}
 		s.Candidate = &indexGeneration{ID: run.ID, Catalog: path, SHA: sha, Parent: run.Base.ID, ParentSHA: s.BaselineSHA}
+		progress.stage("saved-pdf-samples")
 		// Saved-link checks read only the deployment's explicitly configured samples.
 		if len(m.config.LinkSamples) > 0 {
 			archive, e := newPDFArchive()
@@ -483,6 +496,7 @@ func (m *indexManager) execute(ctx context.Context, run indexRun, s *indexState)
 			}
 			s.Validation["saved_links_verified"] = len(m.config.LinkSamples)
 		}
+		progress.finish(true)
 		if run.Meaning {
 			s.Phase = "meaning"
 		} else {

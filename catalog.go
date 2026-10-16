@@ -173,14 +173,23 @@ func (d *database) initialize() error {
 }
 
 func (d *database) verify() error {
+	return d.verifyObserved(nil)
+}
+func (d *database) verifyObserved(stage func(string)) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if stage != nil {
+		stage("sqlite-integrity")
+	}
 	r, err := d.rows("PRAGMA integrity_check")
 	if err != nil {
 		return err
 	}
 	if len(r) != 1 || r[0][0] != "ok" {
 		return errors.New("database integrity check failed")
+	}
+	if stage != nil {
+		stage("full-text-integrity")
 	}
 	_, err = d.run("INSERT INTO abstracts(abstracts,rank) VALUES('integrity-check',1)")
 	return err

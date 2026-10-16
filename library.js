@@ -41,6 +41,16 @@
       for (const run of runs) {
         const card = node('article', undefined, 'index-run');
         card.append(node('h3', run.status === 'ready' ? 'Validated candidate' : run.phase.replaceAll('-', ' ')), node('p', run.status + ' · ' + new Date(run.updated).toLocaleString(), 'index-meta'));
+        if (run.phase === 'validate-keywords') {
+          const progress = run.validation_progress;
+          if (progress) {
+            const advanced = Date.parse(progress.last_advanced), seconds = Number.isFinite(advanced) ? Math.max(0, Math.floor((Date.now() - advanced) / 1000)) : null;
+            card.append(node('p', 'Validation: ' + progress.stage.replaceAll('-', ' ') + ' · ' + number(progress.work_ticks) + ' database work ticks · ' + (seconds === null ? 'advance time unavailable' : 'last advance ' + seconds + ' seconds ago'), 'index-meta'));
+            card.append(node('p', 'Work ticks count database execution callbacks. They are not rows or a completion percentage.', 'index-meta'));
+          } else {
+            card.append(node('p', 'Detailed progress is unavailable from this worker version. Its heartbeat confirms availability, not scan advancement.', 'index-meta'));
+          }
+        }
         const steps = ['inventory', 'keyword', 'meaning', 'validate', 'activate'];
         const activeStep = run.status === 'ready' ? 4 : run.phase === 'meaning' ? 2 : run.phase.startsWith('validate') ? 3 : run.phase === 'keyword' ? 1 : 0;
         const track = node('ol', undefined, 'index-steps'); steps.forEach((step, i) => track.append(node('li', step, i === activeStep ? 'current' : ''))); card.append(track);

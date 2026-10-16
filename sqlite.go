@@ -5,6 +5,27 @@ package main
 #include <sqlite3.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <stdatomic.h>
+typedef struct { _Atomic unsigned long long ticks; } research_sql_progress;
+static int research_sql_tick(void *p) {
+    atomic_fetch_add_explicit(&((research_sql_progress *)p)->ticks, 1, memory_order_relaxed);
+    return 0;
+}
+static research_sql_progress *research_sql_watch(sqlite3 *db) {
+    research_sql_progress *p = calloc(1, sizeof(*p));
+    if (p) {
+        atomic_init(&p->ticks, 0);
+        sqlite3_progress_handler(db, 10000, research_sql_tick, p);
+    }
+    return p;
+}
+static unsigned long long research_sql_ticks(research_sql_progress *p) {
+    return atomic_load_explicit(&p->ticks, memory_order_relaxed);
+}
+static void research_sql_unwatch(sqlite3 *db, research_sql_progress *p) {
+    sqlite3_progress_handler(db, 0, NULL, NULL);
+    free(p);
+}
 static int bind_text(sqlite3_stmt *s, int i, const char *v) {
     return sqlite3_bind_text(s, i, v, -1, SQLITE_TRANSIENT);
 }
@@ -48,12 +69,14 @@ import (
 
 // One connection, one owner at a time. No Go pointer crosses the SQLite API.
 type database struct {
-	mu        sync.Mutex
-	p         *C.sqlite3
-	path      string
-	image     unsafe.Pointer
-	imageSize int64
-	books     map[string]libraryBook
+	mu         sync.Mutex
+	progressMu sync.Mutex
+	progress   *C.research_sql_progress
+	p          *C.sqlite3
+	path       string
+	image      unsafe.Pointer
+	imageSize  int64
+	books      map[string]libraryBook
 }
 
 // Configure from main, before any connection opens. Avoid native library calls
@@ -229,12 +252,44 @@ func openDatabase(path string, create bool) (*database, error) {
 
 func (d *database) close() {
 	if d != nil && d.p != nil {
+		d.stopSQLProgress()
 		C.sqlite3_close(d.p)
 		d.p = nil
 		if d.image != nil {
 			C.free_image(d.image, C.size_t(d.imageSize))
 			d.image = nil
 		}
+	}
+}
+
+// Install and remove only on the connection's owner goroutine, between queries.
+// Sampling uses a C atomic counter; it never enters SQLite or calls Go from C.
+func (d *database) startSQLProgress() error {
+	d.progressMu.Lock()
+	defer d.progressMu.Unlock()
+	if d.p == nil || d.progress != nil {
+		return errors.New("database progress observer is unavailable")
+	}
+	d.progress = C.research_sql_watch(d.p)
+	if d.progress == nil {
+		return errors.New("database progress allocation failed")
+	}
+	return nil
+}
+func (d *database) sqlProgressTicks() uint64 {
+	d.progressMu.Lock()
+	defer d.progressMu.Unlock()
+	if d.progress == nil {
+		return 0
+	}
+	return uint64(C.research_sql_ticks(d.progress))
+}
+func (d *database) stopSQLProgress() {
+	d.progressMu.Lock()
+	defer d.progressMu.Unlock()
+	if d.progress != nil {
+		C.research_sql_unwatch(d.p, d.progress)
+		d.progress = nil
 	}
 }
 func (d *database) err() error { return fmt.Errorf("sqlite: %s", C.GoString(C.sqlite3_errmsg(d.p))) }

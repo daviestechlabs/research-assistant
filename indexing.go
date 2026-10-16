@@ -75,26 +75,27 @@ type indexRun struct {
 	Created     string          `json:"created"`
 }
 type indexState struct {
-	PrunedAt      string           `json:"pruned_at,omitempty"`
-	BaselineSHA   string           `json:"baseline_sha256"`
-	ReusedVectors int64            `json:"reused_vectors"`
-	NewEmbeddings int64            `json:"new_embeddings"`
-	ID            string           `json:"id"`
-	Status        string           `json:"status"`
-	Phase         string           `json:"phase"`
-	Updated       string           `json:"updated"`
-	Error         string           `json:"error,omitempty"`
-	Inventory     []indexInventory `json:"inventory"`
-	Collection    int              `json:"collection_offset"`
-	Object        int              `json:"object_offset"`
-	Row           int64            `json:"row_offset"`
-	Read          int64            `json:"records_read"`
-	Duplicates    int64            `json:"duplicate_records"`
-	Missing       int64            `json:"missing_summaries"`
-	Vectors       int64            `json:"vectors"`
-	LastVectorRow int64            `json:"last_vector_row"`
-	Validation    map[string]any   `json:"validation,omitempty"`
-	Candidate     *indexGeneration `json:"candidate,omitempty"`
+	ValidationProgress *indexValidationProgress `json:"validation_progress,omitempty"`
+	PrunedAt           string                   `json:"pruned_at,omitempty"`
+	BaselineSHA        string                   `json:"baseline_sha256"`
+	ReusedVectors      int64                    `json:"reused_vectors"`
+	NewEmbeddings      int64                    `json:"new_embeddings"`
+	ID                 string                   `json:"id"`
+	Status             string                   `json:"status"`
+	Phase              string                   `json:"phase"`
+	Updated            string                   `json:"updated"`
+	Error              string                   `json:"error,omitempty"`
+	Inventory          []indexInventory         `json:"inventory"`
+	Collection         int                      `json:"collection_offset"`
+	Object             int                      `json:"object_offset"`
+	Row                int64                    `json:"row_offset"`
+	Read               int64                    `json:"records_read"`
+	Duplicates         int64                    `json:"duplicate_records"`
+	Missing            int64                    `json:"missing_summaries"`
+	Vectors            int64                    `json:"vectors"`
+	LastVectorRow      int64                    `json:"last_vector_row"`
+	Validation         map[string]any           `json:"validation,omitempty"`
+	Candidate          *indexGeneration         `json:"candidate,omitempty"`
 }
 type indexGeneration struct {
 	UpdateSHA string `json:"update_sha256,omitempty"`
@@ -632,6 +633,7 @@ func (m *indexManager) routes(mux *http.ServeMux) {
 		states = visible
 		// The public response intentionally excludes all storage keys and paths.
 		for n := range states {
+			states[n].ValidationProgress = m.validationProgress(states[n].ID)
 			for j := range states[n].Inventory {
 				states[n].Inventory[j].ObjectCount = len(states[n].Inventory[j].Objects)
 				states[n].Inventory[j].Objects = nil

@@ -148,9 +148,15 @@ FROM arxiv_updates u LEFT JOIN documents d ON u.id=d.id WHERE u.rowid>? ORDER BY
 			return e
 		}
 		defer d.close()
-		if e = d.verify(); e != nil {
+		progress, e := m.observeValidation(run.ID, d)
+		if e != nil {
 			return e
 		}
+		defer progress.finish(false)
+		if e = d.verifyObserved(progress.stage); e != nil {
+			return e
+		}
+		progress.stage("source-counts")
 		counts, e := d.rows("SELECT source,count(*),sum(summary_kind='missing') FROM documents GROUP BY source ORDER BY source")
 		if e != nil {
 			return e
@@ -167,6 +173,7 @@ FROM arxiv_updates u LEFT JOIN documents d ON u.id=d.id WHERE u.rowid>? ORDER BY
 		if _, e = d.run("ATTACH DATABASE ? AS baseline", run.Base.Catalog); e != nil {
 			return e
 		}
+		progress.stage("catalog-diff")
 		changes, e := d.rows(`SELECT (SELECT count(*) FROM documents n LEFT JOIN baseline.documents b ON n.id=b.id WHERE b.id IS NULL),
 (SELECT count(*) FROM baseline.documents b LEFT JOIN documents n ON n.id=b.id WHERE n.id IS NULL),
 (SELECT count(*) FROM documents n JOIN baseline.documents b ON n.id=b.id WHERE n.fingerprint!=b.fingerprint)`)
@@ -176,12 +183,14 @@ FROM arxiv_updates u LEFT JOIN documents d ON u.id=d.id WHERE u.rowid>? ORDER BY
 		if e = d.exec("DETACH DATABASE baseline; DROP TABLE IF EXISTS indexing_checkpoint"); e != nil {
 			return e
 		}
+		progress.stage("catalog-checksum")
 		sha, e := indexFileSHA(path)
 		if e != nil {
 			return e
 		}
 		s.Candidate = &indexGeneration{ID: run.ID, Catalog: path, SHA: sha, Parent: run.Base.ID, ParentSHA: s.BaselineSHA, UpdateSHA: run.UpdateSHA}
 		s.Validation = map[string]any{"sqlite_integrity": true, "fts_integrity": true, "counts_reconciled": true, "all_snapshot_rows_read": true, "source_counts": counts, "added_records": changes[0][0], "removed_records": changes[0][1], "changed_records": changes[0][2], "chat_model_calls": 0, "saved_link_scope": "Downloaded updates retain per-version SHA-256 receipts; configured samples are checked separately."}
+		progress.stage("saved-pdf-samples")
 		if len(m.config.LinkSamples) > 0 {
 			archive, e := newPDFArchive()
 			if e != nil || archive == nil {
@@ -194,6 +203,7 @@ FROM arxiv_updates u LEFT JOIN documents d ON u.id=d.id WHERE u.rowid>? ORDER BY
 			}
 			s.Validation["saved_links_verified"] = len(m.config.LinkSamples)
 		}
+		progress.finish(true)
 		s.Phase = "meaning"
 		if e = m.saveState(s); e != nil {
 			return e

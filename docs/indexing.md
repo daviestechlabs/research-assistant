@@ -171,3 +171,34 @@ Standalone deployments use `RESEARCH_INDEX_RETENTION=true` and optionally `RESEA
 Retention uses the existing indexing lock and makes no model calls.
 A changed checksum, linked path, or changed ownership record stops that cleanup pass.
 Vector deletion failure preserves the retired catalog file for retry.
+
+## Observe validation work
+
+Library shows separate SQLite integrity, full-text integrity, count, catalog-diff, checksum, and saved-PDF validation stages.
+During database queries, the worker samples SQLite execution callbacks every ten seconds.
+One work tick represents a callback interval of 10,000 SQLite virtual-machine instructions.
+Ticks show observed database execution, not processed rows or a completion percentage.
+The last-advance timestamp changes when ticks increase or the validation stage changes.
+The receipt timestamp shows the observer heartbeat separately.
+Checksum and PDF stages do not increment database work ticks.
+A blocked storage read can delay both a query and its next execution callback.
+
+Older workers expose their existing heartbeat and saved batch checkpoint only.
+Their Library cards state that detailed progress is unavailable.
+Pin the worker image during an active validation pass.
+Upgrade after the run finishes to avoid repeating that pass.
+The observer does not change the catalog, skip validation, or call an embedding model.
+
+## Choose metadata storage
+
+Row count alone does not determine when a catalog needs a server database.
+SQLite fits an embedded reader and portable catalog snapshots.
+This application can load a bounded catalog image for serving.
+The offline validator still scans its on-disk candidate and baseline.
+Network-backed files can make those scans expensive.
+
+For a shared deployment, assess PostgreSQL for metadata and concurrent updates.
+Retain the vector service for embeddings and object storage for saved documents.
+A migration needs an import check, source-count reconciliation, retrieval comparisons, and a rollback path.
+Keep the current store until those checks pass.
+Changing metadata storage does not inherently require changing the embedding model.
