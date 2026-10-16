@@ -112,6 +112,10 @@
       "enabled": false,
       "intervalHours": 24,
       "minFreeGiB": 64
+    },
+    "retention": {
+      "enabled": false,
+      "pruneOriginal": false
     }
   },
   "arxivSync": {

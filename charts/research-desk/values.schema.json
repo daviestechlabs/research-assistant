@@ -610,6 +610,23 @@
             "intervalHours",
             "minFreeGiB"
           ]
+        },
+        "retention": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "pruneOriginal": {
+              "type": "boolean",
+              "description": "Allow retiring the original catalog only after it leaves the live and previous slots."
+            }
+          },
+          "required": [
+            "enabled",
+            "pruneOriginal"
+          ]
         }
       },
       "required": [
@@ -842,6 +859,46 @@
             }
           },
           "arxivSync": {
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "indexing"
+        ],
+        "properties": {
+          "indexing": {
+            "required": [
+              "retention"
+            ],
+            "properties": {
+              "retention": {
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "indexing": {
             "required": [
               "enabled"
             ],

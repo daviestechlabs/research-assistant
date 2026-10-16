@@ -40,6 +40,7 @@ def generated_crd():
         storage["properties"][key]["default"] = values["storage"][key]
     schema["required"] = ["auth", "storage"]
     schema["x-kubernetes-validations"] = [
+        {"rule": '!has(self.indexing) || !has(self.indexing.retention) || !self.indexing.retention.enabled || self.indexing.enabled', "message": "Catalog retention requires indexing."},
         {"rule": '!has(self.indexing) || !has(self.indexing.arxivAutoMerge) || !self.indexing.arxivAutoMerge.enabled || (self.indexing.enabled && self.indexing.arxivUpdatesEnabled && has(self.arxivSync) && self.arxivSync.enabled)', "message": "Automatic arXiv merging requires indexing, update support, and harvesting."},
         {"rule": '!has(self.arxivSync) || !self.arxivSync.enabled || (size(self.arxivSync.imageDigest) == 71 && size(self.arxivSync.fromDate) == 10)', "message": "Enabled arXiv sync requires an immutable image and initial coverage date."},
         {"rule": '!has(self.indexing) || !self.indexing.enabled || size(self.indexing.configMapName) > 0', "message": "Enabled indexing requires an external collection configuration."},

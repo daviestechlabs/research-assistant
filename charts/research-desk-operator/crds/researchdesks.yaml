@@ -718,6 +718,22 @@
                           "intervalHours",
                           "minFreeGiB"
                         ]
+                      },
+                      "retention": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "pruneOriginal": {
+                            "type": "boolean",
+                            "description": "Allow retiring the original catalog only after it leaves the live and previous slots."
+                          }
+                        },
+                        "required": [
+                          "enabled",
+                          "pruneOriginal"
+                        ]
                       }
                     },
                     "required": [
@@ -759,6 +775,10 @@
                         "enabled": false,
                         "intervalHours": 24,
                         "minFreeGiB": 64
+                      },
+                      "retention": {
+                        "enabled": false,
+                        "pruneOriginal": false
                       }
                     }
                   },
@@ -901,6 +921,10 @@
                   "storage"
                 ],
                 "x-kubernetes-validations": [
+                  {
+                    "rule": "!has(self.indexing) || !has(self.indexing.retention) || !self.indexing.retention.enabled || self.indexing.enabled",
+                    "message": "Catalog retention requires indexing."
+                  },
                   {
                     "rule": "!has(self.indexing) || !has(self.indexing.arxivAutoMerge) || !self.indexing.arxivAutoMerge.enabled || (self.indexing.enabled && self.indexing.arxivUpdatesEnabled && has(self.arxivSync) && self.arxivSync.enabled)",
                     "message": "Automatic arXiv merging requires indexing, update support, and harvesting."

@@ -112,3 +112,19 @@ for key,value in [('intervalHours',5),('intervalHours',169),('minFreeGiB',7)]:
     except jsonschema.ValidationError:continue
     raise AssertionError('Automatic merge accepted unsafe bound: '+key)
 print('Automatic merge prerequisites, bounded cadence, storage reserve, and worker credential boundary pass.')
+
+retained = copy.deepcopy(automatic)
+retained['indexing']['retention'] = {'enabled':True,'pruneOriginal':True}
+jsonschema.validate(retained, schema)
+output = subprocess.check_output([args.helm,'template','research-desk',str(root/'charts/research-desk'),'-n','research','-f','-'],input=json.dumps(retained),text=True)
+resources = [r for r in yaml.safe_load_all(output) if r]
+retained_app = next(r for r in resources if r['kind']=='Deployment' and not r['metadata']['name'].endswith('-indexer'))
+env = {e['name']:e.get('value') for e in retained_app['spec']['template']['spec']['containers'][0]['env']}
+assert env['RESEARCH_INDEX_RETENTION']=='true' and env['RESEARCH_INDEX_RETENTION_PRUNE_ORIGINAL']=='true'
+retained_worker = next(r for r in resources if r['kind']=='Deployment' and r['metadata']['name'].endswith('-indexer'))
+assert retained_worker['spec']['template']==worker['spec']['template']
+bad = copy.deepcopy(retained); bad['indexing']['enabled']=False
+try: jsonschema.validate(bad,schema)
+except jsonschema.ValidationError: pass
+else: raise AssertionError('Retention without indexing accepted')
+print('One-backup retention policy, prerequisite, and unchanged worker template checks pass.')

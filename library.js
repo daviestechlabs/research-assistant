@@ -18,6 +18,8 @@
       $('index-worker-status').textContent = live ? 'Offline worker is connected. Indexing makes no chat model calls.' : 'Worker is unavailable or has not checked in. Requests stay saved.';
       $('index-rollback').disabled = !snapshot.rollback_available || busy;
       $('index-active').textContent = snapshot.active === 'original' ? 'Original catalog' : 'Generation ' + snapshot.active.slice(0, 8);
+      const retention = snapshot.retention;
+      $('index-retention-status').textContent = retention?.enabled ? 'Storage policy: live catalog + one rollback catalog. Unfinished candidates stay protected.' + (retention.pruned_generations ? ' ' + number(retention.pruned_generations) + ' older catalogs retired.' : '') + (retention.error ? ' ' + retention.error : '') : 'Automatic catalog cleanup is disabled.';
       if (!$('index-collections').children.length) {
         for (const collection of snapshot.collections) {
           const label = node('label', undefined, 'index-collection'), checkbox = document.createElement('input');

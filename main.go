@@ -788,6 +788,11 @@ func serve(d *database, i *inference, address string) error {
 			done := desk.indexing.startAutoMerge(ctx, policy)
 			defer func() { cancel(); <-done }()
 		}
+		if retentionPolicy().Enabled {
+			ctx, cancel := context.WithCancel(context.Background())
+			done := desk.indexing.startRetention(ctx)
+			defer func() { cancel(); <-done }()
+		}
 	}
 	err = s.Serve(l)
 	if errors.Is(err, http.ErrServerClosed) {

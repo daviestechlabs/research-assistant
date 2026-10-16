@@ -75,6 +75,7 @@ type indexRun struct {
 	Created     string          `json:"created"`
 }
 type indexState struct {
+	PrunedAt      string           `json:"pruned_at,omitempty"`
 	BaselineSHA   string           `json:"baseline_sha256"`
 	ReusedVectors int64            `json:"reused_vectors"`
 	NewEmbeddings int64            `json:"new_embeddings"`
@@ -423,7 +424,13 @@ func (m *indexManager) submitRun(kind string, ids []string, meaning, automatic b
 	if e != nil {
 		return state, e
 	}
-	if len(states) >= 100 {
+	retained := 0
+	for _, state := range states {
+		if state.PrunedAt == "" {
+			retained++
+		}
+	}
+	if retained >= 100 {
 		return state, errors.New("index history needs operator retention maintenance")
 	}
 	for _, s := range states {
@@ -563,6 +570,9 @@ func (m *indexManager) activate(id string, rollback bool) error {
 		return errors.New("candidate used an older active generation; rebuild from the current catalog")
 	}
 	previous := a.Current
+	if e = m.rememberSwitch(a); e != nil {
+		return e
+	}
 	a.Previous = &previous
 	a.Current = candidate
 	if e = writeIndexJSON(filepath.Join(m.root, "active.json"), a); e != nil {
@@ -612,6 +622,14 @@ func (m *indexManager) routes(mux *http.ServeMux) {
 		for _, c := range m.config.Collections {
 			collections = append(collections, map[string]any{"id": c.ID, "label": c.Label, "source": c.Source, "adapter": c.Adapter})
 		}
+		// Retired generations retain small audit receipts, not visible catalog copies.
+		visible := states[:0]
+		for _, state := range states {
+			if state.PrunedAt == "" {
+				visible = append(visible, state)
+			}
+		}
+		states = visible
 		// The public response intentionally excludes all storage keys and paths.
 		for n := range states {
 			for j := range states[n].Inventory {
@@ -630,7 +648,7 @@ func (m *indexManager) routes(mux *http.ServeMux) {
 		if readIndexJSON(filepath.Join(m.root, "active.json"), &a) != nil {
 			a.Current = m.base
 		}
-		writeJSON(w, 200, map[string]any{"collections": collections, "runs": states, "active": a.Current.ID, "rollback_available": a.Previous != nil, "meaning_available": m.config.ModelSHA != "", "worker_heartbeat": indexHeartbeat(m.root), "arxiv_sync": syncPublicStatus(), "arxiv_updates_enabled": os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") == "true", "arxiv_auto_merge": m.autoMergePublicStatus()})
+		writeJSON(w, 200, map[string]any{"collections": collections, "runs": states, "active": a.Current.ID, "rollback_available": a.Previous != nil, "meaning_available": m.config.ModelSHA != "", "worker_heartbeat": indexHeartbeat(m.root), "arxiv_sync": syncPublicStatus(), "arxiv_updates_enabled": os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") == "true", "arxiv_auto_merge": m.autoMergePublicStatus(), "retention": m.retentionPublicStatus()})
 	}))
 	mux.HandleFunc("POST /api/library/indexing", wrap(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {

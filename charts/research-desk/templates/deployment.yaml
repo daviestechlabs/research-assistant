@@ -46,6 +46,12 @@ spec:
             - configMapRef:
                 name: {{ include "desk.configName" . }}
           env:
+            {{- if .Values.indexing.retention.enabled }}
+            - name: RESEARCH_INDEX_RETENTION
+              value: "true"
+            - name: RESEARCH_INDEX_RETENTION_PRUNE_ORIGINAL
+              value: {{ .Values.indexing.retention.pruneOriginal | quote }}
+            {{- end }}
             {{- if .Values.indexing.arxivAutoMerge.enabled }}
             - name: RESEARCH_ARXIV_AUTO_MERGE
               value: "true"

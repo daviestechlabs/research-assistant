@@ -150,3 +150,24 @@ Do not delete the active generation, previous generation, or session and usage d
 
 `research-assistant check-indexing` reads bounded metadata samples and embeds one abstract when configured.
 It does not write source objects or vectors. Use it to verify an adapter before a large run.
+
+## Keep one rollback catalog
+
+Enable `ResearchDesk.spec.indexing.retention.enabled` to keep the live catalog and one previous catalog.
+Cleanup runs every minute after the application opens the active generation.
+It retires older managed catalog files, frozen update snapshots, and their exact vector collections.
+Unfinished runs and their parent catalogs stay protected.
+Small run receipts remain for audit and restart recovery.
+Library shows the policy and any cleanup error.
+
+The original imported catalog stays protected by default.
+Set `indexing.retention.pruneOriginal: true` to permit its cleanup after it leaves both protected slots.
+This option also permits retiring its recorded semantic collection.
+Use it only when this desk owns the original catalog and semantic receipt.
+The policy preserves saved PDFs, books, models, sessions, and source archives.
+A new candidate temporarily uses additional storage while it builds and validates.
+
+Standalone deployments use `RESEARCH_INDEX_RETENTION=true` and optionally `RESEARCH_INDEX_RETENTION_PRUNE_ORIGINAL=true`.
+Retention uses the existing indexing lock and makes no model calls.
+A changed checksum, linked path, or changed ownership record stops that cleanup pass.
+Vector deletion failure preserves the retired catalog file for retry.
