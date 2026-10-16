@@ -107,7 +107,12 @@
     ],
     "trustConfigMapName": "",
     "imageDigest": "",
-    "arxivUpdatesEnabled": false
+    "arxivUpdatesEnabled": false,
+    "arxivAutoMerge": {
+      "enabled": false,
+      "intervalHours": 24,
+      "minFreeGiB": 64
+    }
   },
   "arxivSync": {
     "enabled": false,

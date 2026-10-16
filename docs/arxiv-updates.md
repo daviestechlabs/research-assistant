@@ -86,7 +86,7 @@ Copied vectors use bounded batches without the embedding rate delay.
 Complete vector counting, integrity checks, and configured saved-PDF samples remain required.
 The update never re-downloads the original archive or re-embeds unchanged papers.
 
-Activation remains a separate administrator action.
+Activation remains a separate administrator action unless automatic merging is enabled.
 The candidate must retain the same active parent identity.
 Rollback retains the previous catalog and vectors.
 New harvests after queueing enter a later candidate.
@@ -96,3 +96,47 @@ Signed-in PDF reading first checks the saved update receipt and checksum.
 Older papers retain their existing archive reader.
 The browser receives no NAS path or credential.
 Public search results do not grant public access to saved PDFs.
+
+## Automatic merging
+
+Enable this policy after activating the complete catalog.
+It authorizes automatic activation of candidates created by this policy.
+Manual candidates keep their existing review step.
+
+```yaml
+indexing:
+  enabled: true
+  arxivUpdatesEnabled: true
+  arxivAutoMerge:
+    enabled: true
+    intervalHours: 24
+    minFreeGiB: 64
+```
+
+The application checks the policy each minute.
+It queues the first update when the worker is available.
+After activation, it waits the configured interval before checking for new metadata.
+An unchanged metadata snapshot also starts that interval.
+PDF download progress and repeated feed records do not trigger another candidate.
+PDF downloads continue independently of catalog updates.
+Search can include new abstracts while their PDFs remain pending or unavailable.
+
+The worker freezes the update snapshot and reuses matching saved vectors.
+It retains normal integrity, source count, vector count, checksum, and configured PDF checks.
+The coordinator waits for active research jobs before switching.
+The admission lock prevents new research jobs from racing that check.
+The switch records the previous catalog for rollback and reloads the application.
+It uses no chat model and does not restart the original full rebuild.
+
+Failed, paused, or cancelled automatic candidates need operator review.
+A changed parent or failed activation also blocks unattended replacement.
+The coordinator never adopts a manual candidate.
+Persistent ownership receipts allow recovery after an application restart.
+Library shows the policy state, next check, and any required action.
+Disable `arxivAutoMerge.enabled` to stop automatic queuing and activation.
+An already queued worker can finish its candidate without activating it.
+
+The storage reserve blocks new automatic candidates when NAS space is low.
+Old catalogs, vectors, and PDF versions are not deleted automatically.
+The existing 100-run indexing history limit still requires operator retention maintenance.
+Set the reserve for both catalog copies and vector storage in your deployment.

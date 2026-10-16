@@ -32,6 +32,8 @@
 	  $('arxiv-sync-panel').hidden = !sync;
 	  if (sync) {
 	    $('arxiv-sync-status').textContent = sync.state.replaceAll('-', ' ') + ' · ' + number(sync.saved_pdfs) + ' saved PDFs · ' + number(sync.pending_pdfs) + ' waiting · ' + number(sync.unavailable_pdfs) + ' unavailable or too large' + (sync.updated ? ' · checked ' + new Date(sync.updated).toLocaleString() : '');
+	    const automatic = snapshot.arxiv_auto_merge;
+	    $('arxiv-auto-status').textContent = automatic?.enabled ? 'Automatic merging: ' + automatic.state.replaceAll('-', ' ') + ' · every ' + automatic.interval_hours + ' hours' + (automatic.next_check ? ' · next check ' + new Date(automatic.next_check).toLocaleString() : '') + (automatic.error ? '. ' + automatic.error : '') : 'Automatic merging is disabled. Review and activate update candidates in Library.';
 	    $('index-arxiv-update').disabled = busy || !snapshot.arxiv_updates_enabled || runs.some(run => !['ready', 'complete', 'cancelled'].includes(run.status)) || snapshot.active === 'original';
 	  }
       for (const run of runs) {

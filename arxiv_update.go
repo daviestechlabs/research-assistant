@@ -180,7 +180,7 @@ FROM arxiv_updates u LEFT JOIN documents d ON u.id=d.id WHERE u.rowid>? ORDER BY
 		if e != nil {
 			return e
 		}
-		s.Candidate = &indexGeneration{ID: run.ID, Catalog: path, SHA: sha, Parent: run.Base.ID, ParentSHA: s.BaselineSHA}
+		s.Candidate = &indexGeneration{ID: run.ID, Catalog: path, SHA: sha, Parent: run.Base.ID, ParentSHA: s.BaselineSHA, UpdateSHA: run.UpdateSHA}
 		s.Validation = map[string]any{"sqlite_integrity": true, "fts_integrity": true, "counts_reconciled": true, "all_snapshot_rows_read": true, "source_counts": counts, "added_records": changes[0][0], "removed_records": changes[0][1], "changed_records": changes[0][2], "chat_model_calls": 0, "saved_link_scope": "Downloaded updates retain per-version SHA-256 receipts; configured samples are checked separately."}
 		if len(m.config.LinkSamples) > 0 {
 			archive, e := newPDFArchive()

@@ -88,3 +88,27 @@ for key, change in [('imageDigest','latest'),('directory','../escape'),('maxDown
     except jsonschema.ValidationError: continue
     raise AssertionError('Unsafe arXiv sync field accepted: '+key)
 print('Scheduled arXiv updates, immutable images, no credentials, bounded storage, and unchanged indexer rendering pass.')
+
+automatic = copy.deepcopy(sync_values)
+automatic['indexing']['arxivUpdatesEnabled'] = True
+automatic['indexing']['arxivAutoMerge'] = {'enabled':True,'intervalHours':24,'minFreeGiB':64}
+jsonschema.validate(automatic,schema)
+text = subprocess.check_output([args.helm,'template','research-desk',str(root/'charts/research-desk'),'-n','research','-f','-'],input=json.dumps(automatic),text=True)
+objects = [r for r in yaml.safe_load_all(text) if r]
+app = next(r for r in objects if r['kind']=='Deployment' and not r['metadata']['name'].endswith('-indexer'))
+env = {v['name']:v.get('value') for v in app['spec']['template']['spec']['containers'][0]['env']}
+assert env['RESEARCH_ARXIV_AUTO_MERGE']=='true' and env['RESEARCH_ARXIV_AUTO_MERGE_HOURS']=='24'
+worker = next(r for r in objects if r['kind']=='Deployment' and r['metadata']['name'].endswith('-indexer'))
+assert not any(v['name'].startswith('RESEARCH_ARXIV_AUTO_MERGE') for v in worker['spec']['template']['spec']['containers'][0]['env'])
+assert not any(v['name']=='RESEARCH_MODEL_KEY' for v in worker['spec']['template']['spec']['containers'][0]['env'])
+for section,key,value in [('indexing','arxivUpdatesEnabled',False),('arxivSync','enabled',False)]:
+    bad=copy.deepcopy(automatic);bad[section][key]=value
+    try:jsonschema.validate(bad,schema)
+    except jsonschema.ValidationError:continue
+    raise AssertionError('Automatic merge accepted missing prerequisite: '+key)
+for key,value in [('intervalHours',5),('intervalHours',169),('minFreeGiB',7)]:
+    bad=copy.deepcopy(automatic);bad['indexing']['arxivAutoMerge'][key]=value
+    try:jsonschema.validate(bad,schema)
+    except jsonschema.ValidationError:continue
+    raise AssertionError('Automatic merge accepted unsafe bound: '+key)
+print('Automatic merge prerequisites, bounded cadence, storage reserve, and worker credential boundary pass.')

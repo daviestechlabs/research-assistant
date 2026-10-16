@@ -695,6 +695,29 @@
                       },
                       "arxivUpdatesEnabled": {
                         "type": "boolean"
+                      },
+                      "arxivAutoMerge": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "intervalHours": {
+                            "type": "integer",
+                            "minimum": 6,
+                            "maximum": 168
+                          },
+                          "minFreeGiB": {
+                            "type": "integer",
+                            "minimum": 8,
+                            "maximum": 4096
+                          }
+                        },
+                        "required": [
+                          "enabled",
+                          "intervalHours",
+                          "minFreeGiB"
+                        ]
                       }
                     },
                     "required": [
@@ -731,7 +754,12 @@
                       ],
                       "trustConfigMapName": "",
                       "imageDigest": "",
-                      "arxivUpdatesEnabled": false
+                      "arxivUpdatesEnabled": false,
+                      "arxivAutoMerge": {
+                        "enabled": false,
+                        "intervalHours": 24,
+                        "minFreeGiB": 64
+                      }
                     }
                   },
                   "arxivSync": {
@@ -873,6 +901,10 @@
                   "storage"
                 ],
                 "x-kubernetes-validations": [
+                  {
+                    "rule": "!has(self.indexing) || !has(self.indexing.arxivAutoMerge) || !self.indexing.arxivAutoMerge.enabled || (self.indexing.enabled && self.indexing.arxivUpdatesEnabled && has(self.arxivSync) && self.arxivSync.enabled)",
+                    "message": "Automatic arXiv merging requires indexing, update support, and harvesting."
+                  },
                   {
                     "rule": "!has(self.arxivSync) || !self.arxivSync.enabled || (size(self.arxivSync.imageDigest) == 71 && size(self.arxivSync.fromDate) == 10)",
                     "message": "Enabled arXiv sync requires an immutable image and initial coverage date."

@@ -778,6 +778,17 @@ func serve(d *database, i *inference, address string) error {
 			})
 		}
 	}
+	if desk != nil && desk.indexing != nil {
+		policy, policyErr := arxivAutoConfig()
+		if policyErr != nil {
+			return policyErr
+		}
+		if policy.Enabled {
+			ctx, cancel := context.WithCancel(context.Background())
+			done := desk.indexing.startAutoMerge(ctx, policy)
+			defer func() { cancel(); <-done }()
+		}
+	}
 	err = s.Serve(l)
 	if errors.Is(err, http.ErrServerClosed) {
 		<-shutdownDone

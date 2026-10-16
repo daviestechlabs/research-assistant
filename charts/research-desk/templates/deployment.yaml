@@ -46,6 +46,14 @@ spec:
             - configMapRef:
                 name: {{ include "desk.configName" . }}
           env:
+            {{- if .Values.indexing.arxivAutoMerge.enabled }}
+            - name: RESEARCH_ARXIV_AUTO_MERGE
+              value: "true"
+            - name: RESEARCH_ARXIV_AUTO_MERGE_HOURS
+              value: {{ .Values.indexing.arxivAutoMerge.intervalHours | quote }}
+            - name: RESEARCH_ARXIV_AUTO_MERGE_MIN_FREE_GIB
+              value: {{ .Values.indexing.arxivAutoMerge.minFreeGiB | quote }}
+            {{- end }}
             {{- if .Values.arxivSync.enabled }}
             - name: RESEARCH_ARXIV_SYNC_ROOT
               value: {{ printf "/catalog/%s" .Values.arxivSync.directory | quote }}

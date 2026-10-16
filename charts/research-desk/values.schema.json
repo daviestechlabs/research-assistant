@@ -586,6 +586,30 @@
         },
         "arxivUpdatesEnabled": {
           "type": "boolean"
+        },
+        "arxivAutoMerge": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "intervalHours": {
+              "type": "integer",
+              "minimum": 6,
+              "maximum": 168
+            },
+            "minFreeGiB": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 4096
+            }
+          },
+          "required": [
+            "enabled",
+            "intervalHours",
+            "minFreeGiB"
+          ]
         }
       },
       "required": [
@@ -766,6 +790,64 @@
               },
               "fromDate": {
                 "minLength": 10
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "indexing"
+        ],
+        "properties": {
+          "indexing": {
+            "required": [
+              "arxivAutoMerge"
+            ],
+            "properties": {
+              "arxivAutoMerge": {
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "indexing",
+          "arxivSync"
+        ],
+        "properties": {
+          "indexing": {
+            "required": [
+              "enabled",
+              "arxivUpdatesEnabled"
+            ],
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "arxivUpdatesEnabled": {
+                "const": true
+              }
+            }
+          },
+          "arxivSync": {
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "const": true
               }
             }
           }

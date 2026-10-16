@@ -64,6 +64,8 @@ type indexInventory struct {
 	MissingSummaries int64         `json:"missing_summaries"`
 }
 type indexRun struct {
+	Automatic   bool            `json:"automatic,omitempty"`
+	UpdateSHA   string          `json:"update_sha256,omitempty"`
 	ID          string          `json:"id"`
 	Kind        string          `json:"kind"`
 	Collections []string        `json:"collections"`
@@ -94,6 +96,7 @@ type indexState struct {
 	Candidate     *indexGeneration `json:"candidate,omitempty"`
 }
 type indexGeneration struct {
+	UpdateSHA string `json:"update_sha256,omitempty"`
 	Parent    string `json:"parent,omitempty"`
 	ParentSHA string `json:"parent_sha256,omitempty"`
 	ID        string `json:"id"`
@@ -346,15 +349,24 @@ func (m *indexManager) states() ([]indexState, error) {
 	return out, nil
 }
 func (m *indexManager) submit(kind string, ids []string, meaning bool) (indexState, error) {
+	return m.submitRun(kind, ids, meaning, false)
+}
+func (m *indexManager) submitRun(kind string, ids []string, meaning, automatic bool) (indexState, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var state indexState
+	if m.reloading.Load() {
+		return state, errors.New("catalog reload is in progress")
+	}
 	lock, e := indexLock(filepath.Join(m.root, "control.lock"))
 	if e != nil {
 		return state, e
 	}
 	defer indexUnlock(lock)
 	update := kind == "arxiv-update"
+	if automatic && !update {
+		return state, errors.New("automatic updates require the arXiv update workflow")
+	}
 	if update && os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") != "true" {
 		return state, errors.New("the indexing worker must enable arXiv updates after the current rebuild finishes")
 	}
@@ -428,14 +440,21 @@ func (m *indexManager) submit(kind string, ids []string, meaning bool) (indexSta
 		return state, e
 	}
 	defer os.RemoveAll(staged)
+	updateSHA := ""
 	if update {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		if e = freezeArxivUpdates(ctx, filepath.Join(staged, "updates.sqlite")); e != nil {
 			return state, e
 		}
+		if updateSHA, e = arxivMetadataDigest(ctx, filepath.Join(staged, "updates.sqlite")); e != nil {
+			return state, e
+		}
+		if automatic && updateSHA == m.base.UpdateSHA {
+			return state, errArxivUnchanged
+		}
 	}
-	run := indexRun{ID: id, Kind: kind, Collections: ids, Meaning: meaning, ConfigSHA: m.configSHA, Base: m.base, Created: indexTime()}
+	run := indexRun{ID: id, Kind: kind, Collections: ids, Meaning: meaning, ConfigSHA: m.configSHA, Base: m.base, Created: indexTime(), Automatic: automatic, UpdateSHA: updateSHA}
 	state = indexState{ID: id, Status: "queued", Phase: "inventory", Updated: indexTime()}
 	if e = writeIndexJSON(filepath.Join(staged, "request.json"), run); e != nil {
 		return state, e
@@ -495,7 +514,7 @@ func (m *indexManager) activate(id string, rollback bool) error {
 		rows, e := m.desk.db.rows("SELECT count(*) FROM desk_jobs WHERE status IN ('queued','running')")
 		m.desk.db.mu.Unlock()
 		if e != nil || len(rows) != 1 || rows[0][0] != "0" {
-			return errors.New("finish or cancel research jobs before switching the catalog")
+			return errIndexJobsBusy
 		}
 	}
 	var a indexActive
@@ -549,6 +568,19 @@ func (m *indexManager) activate(id string, rollback bool) error {
 	if e = writeIndexJSON(filepath.Join(m.root, "active.json"), a); e != nil {
 		return e
 	}
+	// Activated generations remain usable through the rollback receipt. Mark
+	// their indexing runs complete so unattended updates do not mistake them
+	// for candidates awaiting a review.
+	for _, generation := range []indexGeneration{previous, candidate} {
+		if generation.ID == "original" {
+			continue
+		}
+		var state indexState
+		if readIndexJSON(m.runPath(generation.ID, "state.json"), &state) == nil && state.Status == "ready" {
+			state.Status = "complete"
+			_ = m.saveState(&state)
+		}
+	}
 	m.reloading.Store(true)
 	m.restart()
 	return nil
@@ -598,7 +630,7 @@ func (m *indexManager) routes(mux *http.ServeMux) {
 		if readIndexJSON(filepath.Join(m.root, "active.json"), &a) != nil {
 			a.Current = m.base
 		}
-		writeJSON(w, 200, map[string]any{"collections": collections, "runs": states, "active": a.Current.ID, "rollback_available": a.Previous != nil, "meaning_available": m.config.ModelSHA != "", "worker_heartbeat": indexHeartbeat(m.root), "arxiv_sync": syncPublicStatus(), "arxiv_updates_enabled": os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") == "true"})
+		writeJSON(w, 200, map[string]any{"collections": collections, "runs": states, "active": a.Current.ID, "rollback_available": a.Previous != nil, "meaning_available": m.config.ModelSHA != "", "worker_heartbeat": indexHeartbeat(m.root), "arxiv_sync": syncPublicStatus(), "arxiv_updates_enabled": os.Getenv("RESEARCH_ARXIV_UPDATES_ENABLED") == "true", "arxiv_auto_merge": m.autoMergePublicStatus()})
 	}))
 	mux.HandleFunc("POST /api/library/indexing", wrap(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
